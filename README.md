@@ -1,3 +1,7 @@
+<p align="center" >
+  <img width="300" src="./misc/logo.png" />
+</p>
+
 # Discord Voice Recording Bot
 
 An open‑source Discord bot that automatically records voice conversations, transcribes them locally, and generates AI‑powered meeting summaries. Ideal for teams capturing discussions, standups, and decision logs.
