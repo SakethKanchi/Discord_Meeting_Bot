@@ -16,10 +16,14 @@ require('dotenv').config();
 const { REST, Routes } = require('discord.js');
 const { commands } = require('./commands.js');
 
-// Bot configuration
-const CLIENT_ID = '857110513988141096';
-const GUILD_ID = '1362914118918602893'; // Sidequest server
-// Alternative Guild ID for Solitude: 980738073283403786
+// Bot configuration from environment variables
+const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
+const GUILD_ID = process.env.DISCORD_GUILD_ID; // Optional: if provided, uses guild-specific commands
+
+if (!CLIENT_ID) {
+    console.error('❌ DISCORD_CLIENT_ID is required in .env file');
+    process.exit(1);
+}
 
 // Initialize REST client
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -29,12 +33,22 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     try {
         console.log('🔄 Started refreshing application (/) commands...');
 
-        // Use global commands instead of guild-specific commands
-        // Global commands persist across bot restarts and don't need redeployment
-        await rest.put(
-            Routes.applicationCommands(CLIENT_ID),
-            { body: commands },
-        );
+        // Use guild-specific commands if GUILD_ID is provided, otherwise use global commands
+        // Global commands persist across bot restarts and work in all servers
+        // Guild-specific commands update instantly but only work in the specified server
+        if (GUILD_ID) {
+            console.log(`📝 Deploying guild-specific commands to guild: ${GUILD_ID}`);
+            await rest.put(
+                Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+                { body: commands },
+            );
+        } else {
+            console.log('📝 Deploying global commands (available in all servers)');
+            await rest.put(
+                Routes.applicationCommands(CLIENT_ID),
+                { body: commands },
+            );
+        }
 
         console.log('✅ Successfully reloaded application (/) commands!');
     } catch (error) {

@@ -71,6 +71,8 @@ Create a `.env` file with your values:
 ```env
 # Discord
 DISCORD_TOKEN=your_discord_bot_token
+DISCORD_CLIENT_ID=your_discord_bot_client_id
+DISCORD_GUILD_ID=your_guild_id  # Optional: if provided, commands are guild-specific
 
 # Google Gemini
 GEMINI_API_KEY=your_gemini_api_key
@@ -79,6 +81,8 @@ GEMINI_API_KEY=your_gemini_api_key
 FOLDER_ID=google_drive_folder_id
 ```
 Notes:
+- `DISCORD_CLIENT_ID`: Your bot's application/client ID (found in Discord Developer Portal → General Information)
+- `DISCORD_GUILD_ID`: Optional. If provided, slash commands are deployed to that specific server (updates instantly). If omitted, commands are global (available in all servers but may take up to 1 hour to propagate)
 - `credentials.json` and `token.json` are used by `uploader.js` (OAuth) and should not be committed.
 - `FOLDER_ID` is required if you plan to upload summaries to Google Drive.
 
@@ -94,8 +98,10 @@ node deploy-commands.js
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `DISCORD_TOKEN` | Discord bot token | ✅ Yes |
+| `DISCORD_CLIENT_ID` | Discord bot application/client ID | ✅ Yes |
+| `DISCORD_GUILD_ID` | Discord server/guild ID (for guild-specific commands) | ⚪ Optional |
 | `GEMINI_API_KEY` | Gemini API key | ✅ Yes |
-| `FOLDER_ID` | Google Drive folder ID (uploader) | ✅ If using uploads |
+| `FOLDER_ID` | Google Drive folder ID (uploader) | ⚪ If using uploads |
 
 ### Bot configuration (`config.js`)
 
