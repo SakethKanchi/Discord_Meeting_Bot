@@ -1,0 +1,52 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# Environment & credentials
+.env
+.env.*.local
+credentials.json
+token.json
+
+# Build artifacts
+dist/
+build/
+coverage/
+.nyc_output/
+
+# OS/Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+
+# Audio & generated content
+PCM_Files/
+Summary/
+Transcripts/
+recordings/
+*.wav
+*.pcm
+*.mp3
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Vosk models (optional large assets)
+vosk-model*/
+
+# Logs
+logs/
+*.log
+
