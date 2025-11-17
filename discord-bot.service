@@ -1,0 +1,24 @@
+[Unit]
+Description=Discord Voice Recording Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/bots/Discord_Bot
+Environment="NODE_ENV=production"
+EnvironmentFile=/home/ubuntu/bots/Discord_Bot/.env
+ExecStart=/usr/bin/node /home/ubuntu/bots/Discord_Bot/bot.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=discord-bot
+
+# Resource limits (adjust as needed)
+LimitNOFILE=65536
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target
+

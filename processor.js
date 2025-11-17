@@ -13,14 +13,19 @@ const {
     existsSync,
     readdirSync,
     promises: fsPromises,
-    mkdirSync
+    mkdirSync,
+    unlinkSync,
+    statSync
 } = require('fs');
+const path = require('path');
 
 // Import AI services
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // Folder paths
-const SUMMARY_FOLDER = './Summary';
+// Use persistent storage if available, otherwise use local directories
+const DATA_DIR = process.env.DATA_DIR || (existsSync('/data') ? '/data' : process.cwd());
+const SUMMARY_FOLDER = path.join(DATA_DIR, 'Summary');
 
 // Ensure folders exist
 if (!existsSync(SUMMARY_FOLDER)) mkdirSync(SUMMARY_FOLDER);
@@ -115,6 +120,12 @@ async function saveSummaryLocally(summary, attendees, channelName, meetingTimest
         return;
     }
 
+    // Validate channelName to prevent null filenames
+    if (!channelName || channelName === 'null' || channelName.trim().length === 0) {
+        console.error('❌ Cannot save summary - invalid channelName');
+        return;
+    }
+
     // Create a single file per channel that appends new meetings
     const channelSummaryPath = `${SUMMARY_FOLDER}/${channelName}_meetings.txt`;
 
@@ -170,8 +181,72 @@ async function saveSummaryLocally(summary, attendees, channelName, meetingTimest
     }
 }
 
+/**
+ * Cleans up temporary summary files and null files from the Summary folder
+ * Removes:
+ * - Files with "null" in the name (null_meetings.txt, null_null_summary.txt, etc.)
+ * - Timestamp-based summary files (*_*_summary.txt) that are temporary files
+ * Keeps:
+ * - Main meetings files (*_meetings.txt)
+ */
+function cleanupTemporarySummaryFiles() {
+    console.log('🧹 Cleaning up temporary summary files...');
+
+    if (!existsSync(SUMMARY_FOLDER)) {
+        console.log('ℹ️ Summary folder does not exist. Skipping cleanup.');
+        return;
+    }
+
+    try {
+        const files = readdirSync(SUMMARY_FOLDER);
+        let deletedCount = 0;
+        const deletedFiles = [];
+
+        files.forEach(file => {
+            const filePath = path.join(SUMMARY_FOLDER, file);
+
+            try {
+                // Skip directories
+                if (!statSync(filePath).isFile()) {
+                    return;
+                }
+
+                // Delete files with "null" in the name
+                if (file.toLowerCase().includes('null')) {
+                    unlinkSync(filePath);
+                    deletedFiles.push(file);
+                    deletedCount++;
+                    return;
+                }
+
+                // Delete timestamp-based summary files (pattern: ChannelName_YYYY-MM-DDTHH-MM-SS-mmmZ_summary.txt)
+                // But keep the main meetings files (*_meetings.txt)
+                const timestampSummaryPattern = /^.+_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_summary\.txt$/;
+                if (timestampSummaryPattern.test(file)) {
+                    unlinkSync(filePath);
+                    deletedFiles.push(file);
+                    deletedCount++;
+                    return;
+                }
+            } catch (err) {
+                console.error(`⚠️ Error processing file ${file}:`, err.message);
+            }
+        });
+
+        if (deletedCount > 0) {
+            console.log(`✅ Cleaned up ${deletedCount} temporary file(s):`);
+            deletedFiles.forEach(file => console.log(`   - ${file}`));
+        } else {
+            console.log('ℹ️ No temporary files to clean up');
+        }
+    } catch (error) {
+        console.error('❌ Error during summary file cleanup:', error.message);
+    }
+}
+
 // Export functions for use by the main bot
 module.exports = {
     summarizeTranscript,
-    saveSummaryLocally
+    saveSummaryLocally,
+    cleanupTemporarySummaryFiles
 };

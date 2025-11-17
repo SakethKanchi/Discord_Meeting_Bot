@@ -77,19 +77,20 @@ DISCORD_GUILD_ID=your_guild_id  # Optional: if provided, commands are guild-spec
 # Google Gemini
 GEMINI_API_KEY=your_gemini_api_key
 
-# Google Drive (OAuth flow with credentials.json/token.json)
+# Google Drive (Service Account recommended for GCP, or OAuth2 fallback)
 FOLDER_ID=google_drive_folder_id
+# SERVICE_ACCOUNT_KEY_PATH=/path/to/service-account-key.json  # Optional, defaults to service-account-key.json
 ```
 Notes:
 - `DISCORD_CLIENT_ID`: Your bot's application/client ID (found in Discord Developer Portal → General Information)
 - `DISCORD_GUILD_ID`: Optional. If provided, slash commands are deployed to that specific server (updates instantly). If omitted, commands are global (available in all servers but may take up to 1 hour to propagate)
-- `credentials.json` and `token.json` are used by `uploader.js` (OAuth) and should not be committed.
+- **Google Drive Authentication**: 
+  - **Service Account (Recommended for GCP)**: Place `service-account-key.json` in bot directory. No OAuth flow needed! See [GCP Setup Guide](GCP_SETUP.md) for details.
+  - **OAuth2 (Fallback)**: `credentials.json` and `token.json` are used by `uploader.js` and should not be committed.
 - `FOLDER_ID` is required if you plan to upload summaries to Google Drive.
 
-### 6) Deploy slash commands
-```bash
-node deploy-commands.js
-```
+### 6) Start the bot
+The bot will automatically deploy slash commands when it starts up. No manual deployment needed!
 
 ## Configuration
 
@@ -102,17 +103,6 @@ node deploy-commands.js
 | `DISCORD_GUILD_ID` | Discord server/guild ID (for guild-specific commands) | ⚪ Optional |
 | `GEMINI_API_KEY` | Gemini API key | ✅ Yes |
 | `FOLDER_ID` | Google Drive folder ID (uploader) | ⚪ If using uploads |
-
-### Bot configuration (`config.js`)
-
-```javascript
-const config = {
-    RUN_FULL_PIPELINE: true,        // Enable complete processing
-    SAVE_TRANSCRIPT_LOCALLY: true,   // Save raw transcripts
-    KEEP_AUDIO_FOR_TESTING: true,    // Retain audio files
-    TEST_SUMMARY_LOCALLY: true,      // Use mock summaries (testing)
-};
-```
 
 ## Usage
 
@@ -161,12 +151,13 @@ Discord_Bot/
 ├─ processor.js           # Audio processing pipeline
 ├─ transcribe.py          # Python transcription helper
 ├─ commands.js            # Slash command definitions
-├─ deploy-commands.js     # Slash command deployment
+├─ scheduler.js           # Operating hours scheduler
 ├─ uploader.js            # Optional Google Drive uploader (OAuth)
+├─ cleanup.js             # Manual cleanup script
+├─ process_existing.js    # Process existing PCM files utility
 ├─ PCM_Files/             # Temporary audio files (auto‑created)
 ├─ Summary/               # Generated summaries (auto‑created)
 ├─ Transcripts/           # Example transcripts (optional)
-├─ config.js              # Bot runtime configuration
 ├─ .env                   # Environment variables (local, do not commit)
 └─ token.json / credentials.json  # OAuth artifacts (uploader)
 ```
@@ -221,13 +212,10 @@ Discord_Bot/
 
 ### Debug mode
 
-Enable debug logging by setting in `config.js`:
-```javascript
-const config = {
-    KEEP_AUDIO_FOR_TESTING: true,  // Keep audio files
-    TEST_SUMMARY_LOCALLY: true,    // Skip Google Drive upload
-};
-```
+The bot uses environment variables and automatic cleanup. For debugging, you can:
+- Check bot logs for detailed information
+- Use `process_existing.js` to process leftover PCM files
+- Run `cleanup.js` manually to test the cleanup process
 
 ## API requirements
 
@@ -253,6 +241,40 @@ const config = {
 3. Make your changes (lint and test if applicable)
 4. Open a Pull Request describing the change and rationale
 
+## Deployment
+
+The bot can be deployed on any cloud provider or VPS that supports Node.js and Python:
+
+- **Google Cloud Platform (Compute Engine)** - [Complete Setup Guide](GCP_SETUP.md) ⭐ Recommended
+- **AWS EC2**
+- **Azure**
+- **DigitalOcean**
+- **Any VPS with Node.js and Python support**
+
+### Deployment Requirements
+
+- Node.js v18+ installed
+- Python 3.8+ installed
+- FFmpeg installed
+- Persistent storage for audio files and summaries
+- Process manager (systemd or PM2) for auto-restart
+
+### Quick Start
+
+**For Google Cloud Platform (Free Tier):**
+- See the comprehensive [GCP Setup Guide](GCP_SETUP.md) for step-by-step instructions
+
+**For Other Providers:**
+- Follow similar steps as the GCP guide, adjusting for your provider's specific requirements
+- Use the deployment checklist: `DEPLOYMENT_CHECKLIST.md`
+
+### Included Files
+
+- `GCP_SETUP.md` - Complete GCP deployment guide
+- `discord-bot.service` - systemd service configuration
+- `ecosystem.config.js` - PM2 configuration
+- `DEPLOYMENT_CHECKLIST.md` - Deployment checklist
+
 ## License
 
 Licensed under the ISC License. See the `LICENSE` file.
@@ -264,6 +286,7 @@ For issues and questions:
 - Review Discord.js documentation
 - Check Vosk model requirements
 - Verify Google API setup
+- Check deployment checklist for hosting issues
 
 ## Changelog
 

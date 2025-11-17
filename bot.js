@@ -5,7 +5,8 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { summarizeTranscript, saveSummaryLocally } = require('./processor.js');
+const { summarizeTranscript, saveSummaryLocally, cleanupTemporarySummaryFiles } = require('./processor.js');
+const { initializeScheduler, shouldBeActive } = require('./scheduler.js');
 
 // Load environment variables
 require('dotenv').config();
@@ -20,8 +21,11 @@ const client = new Client({
 
 // Configuration
 const ffmpegPath = require('ffmpeg-static');
-const PCM_FOLDER = './PCM_Files';
-const SUMMARY_FOLDER = './Summary';
+
+// Use persistent storage if available, otherwise use local directories
+const DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/data') ? '/data' : process.cwd());
+const PCM_FOLDER = path.join(DATA_DIR, 'PCM_Files');
+const SUMMARY_FOLDER = path.join(DATA_DIR, 'Summary');
 
 // Initialize Gemini AI client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -159,7 +163,7 @@ async function processSegmentChronologically(segmentKey) {
     const segmentWavFile = path.join(PCM_FOLDER, `${segmentKey}_processed.wav`);
 
     return new Promise((resolve, reject) => {
-        console.log(`🔄 Mixing ${wavFiles.length} WAV files chronologically to preserve conversation flow...`);
+        console.log(`🔄 Mixing ${converted.length} WAV files chronologically to preserve conversation flow...`);
 
         // Calculate timing offsets for each successfully converted input
         const startTime = converted[0].timestamp;
@@ -267,6 +271,12 @@ async function processSegmentChronologically(segmentKey) {
  * Start recording with proper chronological processing
  */
 async function startRecording(connection, guild, channelId) {
+    // Check if we're within operating hours
+    if (!shouldBeActive()) {
+        console.log('⚠️ Outside operating hours (6 AM - 4 PM). Recording not allowed.');
+        return;
+    }
+
     if (recordingState.isRecording) {
         console.log('⚠️ Already recording!');
         return;
@@ -652,11 +662,13 @@ async function stopRecording() {
             const attendees = Array.from(recordingState.attendees);
             const summary = await summarizeTranscript(transcript, attendees, recordingState.channelName, recordingState.timestamp);
 
-            // Validate summary before saving
+            // Validate summary and state before saving
             if (!summary || summary.trim().length === 0) {
                 console.error('❌ Generated summary is empty, skipping save');
+            } else if (!recordingState.channelName || !recordingState.timestamp) {
+                console.error('❌ Cannot save summary - channelName or timestamp is null');
             } else {
-                // Save summary
+                // Save temporary summary file (will be cleaned up after appending to meetings file)
                 const summaryFileName = `${recordingState.channelName}_${recordingState.timestamp}_summary.txt`;
                 const summaryPath = path.join(SUMMARY_FOLDER, summaryFileName);
                 fs.writeFileSync(summaryPath, summary);
@@ -664,8 +676,17 @@ async function stopRecording() {
                 // Also save to channel-specific meetings file
                 await saveSummaryLocally(summary, attendees, recordingState.channelName, recordingState.timestamp);
 
-                console.log(`✅ Summary saved: ${summaryPath}`);
-                console.log(`📋 Summary: ${summaryPath}`);
+                // Clean up temporary summary file after it's been appended to meetings file
+                try {
+                    if (fs.existsSync(summaryPath)) {
+                        fs.unlinkSync(summaryPath);
+                        console.log(`🗑️ Cleaned up temporary summary file: ${summaryFileName}`);
+                    }
+                } catch (err) {
+                    console.error(`❌ Failed to delete temporary summary file: ${err.message}`);
+                }
+
+                console.log(`✅ Summary appended to meetings file`);
                 console.log(`👥 Attendees: ${attendees.join(', ')}`);
             }
 
@@ -721,6 +742,35 @@ async function stopRecording() {
 client.once('ready', async () => {
     console.log(`🤖 Bot logged in as ${client.user.tag}`);
 
+    // Clean up any existing temporary summary files and null files
+    cleanupTemporarySummaryFiles();
+
+    // Initialize scheduler for 6 AM - 4 PM operation
+    initializeScheduler(async () => {
+        console.log('🛑 End of operating hours (4 PM). Stopping recordings and running cleanup...');
+
+        // Stop any active recording
+        if (recordingState.isRecording) {
+            try {
+                await stopRecording();
+
+                // Disconnect from voice channels
+                if (recordingState.connection) {
+                    const connection = getVoiceConnection(recordingState.connection.joinConfig.guildId);
+                    if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
+                        connection.destroy();
+                        console.log('✅ Left voice channel');
+                    }
+                }
+            } catch (err) {
+                console.error('❌ Error stopping recording:', err);
+            }
+        }
+
+        // Note: Bot stays online but won't record until 6 AM next day
+        console.log('⏰ Bot is now in standby mode. Will resume recording at 6 AM.');
+    });
+
     // Automatically deploy slash commands on startup
     try {
         console.log('🔄 Auto-deploying slash commands...');
@@ -739,39 +789,43 @@ client.once('ready', async () => {
         console.error('❌ Error auto-deploying commands:', error);
     }
 
-    // Check for existing meetings when bot starts up
-    console.log('🔍 Checking for existing meetings...');
+    // Check for existing meetings when bot starts up (only if within operating hours)
+    if (shouldBeActive()) {
+        console.log('🔍 Checking for existing meetings...');
 
-    try {
-        for (const guild of client.guilds.cache.values()) {
-            for (const channel of guild.channels.cache.values()) {
-                if (channel.type === 2) { // Voice channel
-                    const membersCount = channel.members.filter(member => !member.user.bot).size;
-                    if (membersCount > 1) {
-                        console.log(`👥 Found existing meeting in ${channel.name} with ${membersCount} members. Auto-joining...`);
+        try {
+            for (const guild of client.guilds.cache.values()) {
+                for (const channel of guild.channels.cache.values()) {
+                    if (channel.type === 2) { // Voice channel
+                        const membersCount = channel.members.filter(member => !member.user.bot).size;
+                        if (membersCount > 1) {
+                            console.log(`👥 Found existing meeting in ${channel.name} with ${membersCount} members. Auto-joining...`);
 
-                        try {
-                            const connection = joinVoiceChannel({
-                                channelId: channel.id,
-                                guildId: guild.id,
-                                adapterCreator: guild.voiceAdapterCreator,
-                                selfDeaf: false,
-                                selfMute: false
-                            });
-                            await entersState(connection, VoiceConnectionStatus.Ready, 10_000); // Reduced timeout
-                            await startRecording(connection, guild, channel.id);
-                            console.log(`✅ Auto-joined existing meeting in ${channel.name}`);
-                        } catch (error) {
-                            console.error(`❌ Failed to auto-join ${channel.name}:`, error.message);
-                            // Don't crash the bot, just log the error and continue
+                            try {
+                                const connection = joinVoiceChannel({
+                                    channelId: channel.id,
+                                    guildId: guild.id,
+                                    adapterCreator: guild.voiceAdapterCreator,
+                                    selfDeaf: false,
+                                    selfMute: false
+                                });
+                                await entersState(connection, VoiceConnectionStatus.Ready, 10_000); // Reduced timeout
+                                await startRecording(connection, guild, channel.id);
+                                console.log(`✅ Auto-joined existing meeting in ${channel.name}`);
+                            } catch (error) {
+                                console.error(`❌ Failed to auto-join ${channel.name}:`, error.message);
+                                // Don't crash the bot, just log the error and continue
+                            }
                         }
                     }
                 }
             }
+        } catch (error) {
+            console.error('❌ Error during startup meeting check:', error.message);
+            // Continue bot startup even if meeting check fails
         }
-    } catch (error) {
-        console.error('❌ Error during startup meeting check:', error.message);
-        // Continue bot startup even if meeting check fails
+    } else {
+        console.log('⏰ Outside operating hours. Bot will not auto-join meetings until 6 AM.');
     }
 });
 
@@ -782,6 +836,10 @@ client.on('messageCreate', async (message) => {
     const command = args[0];
 
     if (command === '!join') {
+        if (!shouldBeActive()) {
+            return message.reply('⏰ Bot is only active from 6 AM to 4 PM. Please try again during operating hours.');
+        }
+
         const voiceChannel = message.member.voice.channel;
         if (!voiceChannel) {
             return message.reply('❌ You need to be in a voice channel!');
@@ -837,6 +895,13 @@ client.on('interactionCreate', async (interaction) => {
 
     try {
         if (commandName === 'join') {
+            if (!shouldBeActive()) {
+                return interaction.reply({
+                    content: '⏰ Bot is only active from 6 AM to 4 PM. Please try again during operating hours.',
+                    ephemeral: true
+                });
+            }
+
             if (!member.voice.channel) {
                 return interaction.reply({
                     content: '❌ You must be in a voice channel to use this command.',
@@ -898,6 +963,12 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     const membersCount = targetChannel.members.filter(member => !member.user.bot).size;
 
     if (!connection && newState.channelId === targetChannel.id && membersCount > 1) {
+        // Only auto-join if within operating hours
+        if (!shouldBeActive()) {
+            console.log(`⏰ Outside operating hours (6 AM - 4 PM). Not auto-joining channel.`);
+            return;
+        }
+
         console.log(`👥 User joined. There are now ${membersCount} members. Auto-joining channel...`);
         const newConnection = joinVoiceChannel({
             channelId: newState.channelId,
