@@ -1,16 +1,7 @@
 #!/usr/bin/env node
 /**
- * Google Drive Uploader
- * Supports both Service Account (recommended for GCP) and OAuth2 authentication.
- *
- * Service Account (Recommended for GCP):
- *   - Uses GOOGLE_APPLICATION_CREDENTIALS environment variable
- *   - Or SERVICE_ACCOUNT_KEY_PATH environment variable
- *   - No OAuth flow needed, more secure
- *
- * OAuth2 (Fallback):
- *   - Uses credentials.json and token.json
- *   - Requires OAuth flow for initial setup
+ * Google Drive OAuth2 Uploader
+ * Works with personal Google Drive accounts.
  *
  * Usage:
  *   node uploader.js                  # Upload all files in Summary/
@@ -29,17 +20,10 @@ const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
 
 // Use persistent storage if available, otherwise use local directories
 const DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/data') ? '/data' : process.cwd());
-const SUMMARY_FOLDER = path.join(DATA_DIR, 'Summary');
-const FOLDER_ID = process.env.FOLDER_ID;
-
-// Service Account paths (preferred for GCP)
-const SERVICE_ACCOUNT_KEY_PATH = process.env.SERVICE_ACCOUNT_KEY_PATH || 
-    process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-    path.join(DATA_DIR, 'service-account-key.json');
-
-// OAuth2 paths (fallback)
 const CREDENTIALS_PATH = path.join(DATA_DIR, 'credentials.json');
 const TOKEN_PATH = path.join(DATA_DIR, 'token.json');
+const SUMMARY_FOLDER = path.join(DATA_DIR, 'Summary');
+const FOLDER_ID = process.env.FOLDER_ID;
 
 // --- Ensure Summary folder exists ---
 if (!fs.existsSync(SUMMARY_FOLDER)) {
@@ -48,129 +32,63 @@ if (!fs.existsSync(SUMMARY_FOLDER)) {
 }
 
 /**
- * Authenticate using Service Account (recommended for GCP)
+ * Load or request authorization
  */
-async function authenticateWithServiceAccount() {
-    let keyPath = SERVICE_ACCOUNT_KEY_PATH;
-    
-    // Check if file exists
-    if (!fs.existsSync(keyPath)) {
-        return null;
-    }
+async function authorize() {
+    const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf8'));
+    const { client_secret, client_id, redirect_uris } = credentials.installed;
+    const oAuth2Client = new google.auth.OAuth2(
+        client_id,
+        client_secret,
+        redirect_uris[0]
+    );
 
-    try {
-        console.log('🔐 Using Service Account authentication...');
-        const auth = new google.auth.GoogleAuth({
-            keyFile: keyPath,
-            scopes: SCOPES,
-        });
-        
-        const authClient = await auth.getClient();
-        console.log('✅ Service Account authenticated successfully');
-        return authClient;
-    } catch (error) {
-        console.error('❌ Service Account authentication failed:', error.message);
-        return null;
-    }
-}
-
-/**
- * Authenticate using OAuth2 (fallback method)
- */
-async function authenticateWithOAuth2() {
-    if (!fs.existsSync(CREDENTIALS_PATH)) {
-        return null;
-    }
-
-    try {
-        console.log('🔐 Using OAuth2 authentication...');
-        const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf8'));
-        
-        // Check if it's OAuth2 credentials (has 'installed' or 'web' property)
-        if (!credentials.installed && !credentials.web) {
-            console.log('⚠️ credentials.json does not appear to be OAuth2 credentials');
-            return null;
-        }
-
-        const { client_secret, client_id, redirect_uris } = credentials.installed || credentials.web;
-        const oAuth2Client = new google.auth.OAuth2(
-            client_id,
-            client_secret,
-            redirect_uris ? redirect_uris[0] : 'http://localhost'
-        );
-
-        if (fs.existsSync(TOKEN_PATH)) {
-            try {
-                const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
-                oAuth2Client.setCredentials(token);
-                console.log('✅ OAuth2 token loaded');
-                return oAuth2Client;
-            } catch (error) {
-                console.log('⚠️ Error reading token file, will re-authenticate');
-                if (fs.existsSync(TOKEN_PATH)) {
-                    fs.unlinkSync(TOKEN_PATH);
-                }
+    if (fs.existsSync(TOKEN_PATH)) {
+        try {
+            const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+            oAuth2Client.setCredentials(token);
+            return oAuth2Client;
+        } catch (error) {
+            console.log('⚠️ Error reading token file, will re-authenticate');
+            // Delete corrupted token file
+            if (fs.existsSync(TOKEN_PATH)) {
+                fs.unlinkSync(TOKEN_PATH);
             }
         }
-
-        // Generate new token
-        const authUrl = oAuth2Client.generateAuthUrl({
-            access_type: 'offline',
-            scope: SCOPES,
-        });
-        console.log('👉 Authorize this app by visiting this URL:\n', authUrl);
-
-        const readline = require('readline').createInterface({
-            input: process.stdin,
-            output: process.stdout,
-        });
-
-        const code = await new Promise(resolve => {
-            readline.question('Enter the code from that page here: ', code => {
-                readline.close();
-                resolve(code);
-            });
-        });
-
-        const { tokens } = await oAuth2Client.getToken(code);
-        oAuth2Client.setCredentials(tokens);
-        fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
-        console.log('✅ Token stored to', TOKEN_PATH);
-
-        return oAuth2Client;
-    } catch (error) {
-        console.error('❌ OAuth2 authentication failed:', error.message);
-        return null;
     }
+
+    // Generate new token
+    const authUrl = oAuth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: SCOPES,
+    });
+    console.log('👉 Authorize this app by visiting this URL:\n', authUrl);
+
+    const readline = require('readline').createInterface({
+        input: process.stdin,
+        output: process.stdout,
+    });
+
+    const code = await new Promise(resolve => {
+        readline.question('Enter the code from that page here: ', code => {
+            readline.close();
+            resolve(code);
+        });
+    });
+
+    const { tokens } = await oAuth2Client.getToken(code);
+    oAuth2Client.setCredentials(tokens);
+    fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
+    console.log('✅ Token stored to', TOKEN_PATH);
+
+    return oAuth2Client;
 }
 
 /**
- * Initialize Google Drive API with automatic authentication method selection
+ * Initialize Google Drive API
  */
 async function initializeDrive() {
-    // Try Service Account first (recommended for GCP)
-    let auth = await authenticateWithServiceAccount();
-    
-    // Fallback to OAuth2 if Service Account not available
-    if (!auth) {
-        auth = await authenticateWithOAuth2();
-    }
-
-    if (!auth) {
-        throw new Error(
-            '❌ No authentication method available.\n' +
-            'For GCP hosting (recommended):\n' +
-            '  1. Create a Service Account in GCP Console\n' +
-            '  2. Download the JSON key file\n' +
-            '  3. Set SERVICE_ACCOUNT_KEY_PATH environment variable or place it as service-account-key.json\n' +
-            '  4. Share your Google Drive folder with the service account email\n\n' +
-            'For OAuth2 (fallback):\n' +
-            '  1. Create OAuth2 credentials in GCP Console\n' +
-            '  2. Download as credentials.json\n' +
-            '  3. Run uploader.js to complete OAuth flow'
-        );
-    }
-
+    const auth = await authorize();
     return google.drive({ version: 'v3', auth });
 }
 
@@ -251,12 +169,12 @@ async function watchFolder(drive) {
 }
 
 /**
- * Check if error is a token expiration error (OAuth2 only)
+ * Check if error is a token expiration error
  */
 function isTokenError(error) {
     return error?.response?.data?.error === 'invalid_grant' ||
            error?.message?.includes('invalid_grant') ||
-           (error?.code === 401 && fs.existsSync(TOKEN_PATH));
+           error?.code === 401;
 }
 
 /**

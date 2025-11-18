@@ -77,16 +77,14 @@ DISCORD_GUILD_ID=your_guild_id  # Optional: if provided, commands are guild-spec
 # Google Gemini
 GEMINI_API_KEY=your_gemini_api_key
 
-# Google Drive (Service Account recommended for GCP, or OAuth2 fallback)
+# Google Drive (OAuth flow with credentials.json/token.json)
 FOLDER_ID=google_drive_folder_id
-# SERVICE_ACCOUNT_KEY_PATH=/path/to/service-account-key.json  # Optional, defaults to service-account-key.json
 ```
 Notes:
 - `DISCORD_CLIENT_ID`: Your bot's application/client ID (found in Discord Developer Portal → General Information)
 - `DISCORD_GUILD_ID`: Optional. If provided, slash commands are deployed to that specific server (updates instantly). If omitted, commands are global (available in all servers but may take up to 1 hour to propagate)
 - **Google Drive Authentication**: 
-  - **Service Account (Recommended for GCP)**: Place `service-account-key.json` in bot directory. No OAuth flow needed! See [GCP Setup Guide](GCP_SETUP.md) for details.
-  - **OAuth2 (Fallback)**: `credentials.json` and `token.json` are used by `uploader.js` and should not be committed.
+  - **OAuth2**: `credentials.json` and `token.json` are used by `uploader.js` and should not be committed.
 - `FOLDER_ID` is required if you plan to upload summaries to Google Drive.
 
 ### 6) Start the bot
@@ -230,7 +228,7 @@ The bot uses environment variables and automatic cleanup. For debugging, you can
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select existing
 3. Enable Gemini API and Google Drive API
-4. Create service account credentials
+4. Create OAuth2 credentials
 5. Download JSON key file
 6. Get Gemini API key from AI Studio
 
@@ -245,8 +243,8 @@ The bot uses environment variables and automatic cleanup. For debugging, you can
 
 The bot can be deployed on any cloud provider or VPS that supports Node.js and Python:
 
-- **Google Cloud Platform (Compute Engine)** - [Complete Setup Guide](GCP_SETUP.md) ⭐ Recommended
 - **AWS EC2**
+- **Google Cloud Platform (Compute Engine)**
 - **Azure**
 - **DigitalOcean**
 - **Any VPS with Node.js and Python support**
@@ -257,23 +255,7 @@ The bot can be deployed on any cloud provider or VPS that supports Node.js and P
 - Python 3.8+ installed
 - FFmpeg installed
 - Persistent storage for audio files and summaries
-- Process manager (systemd or PM2) for auto-restart
-
-### Quick Start
-
-**For Google Cloud Platform (Free Tier):**
-- See the comprehensive [GCP Setup Guide](GCP_SETUP.md) for step-by-step instructions
-
-**For Other Providers:**
-- Follow similar steps as the GCP guide, adjusting for your provider's specific requirements
-- Use the deployment checklist: `DEPLOYMENT_CHECKLIST.md`
-
-### Included Files
-
-- `GCP_SETUP.md` - Complete GCP deployment guide
-- `discord-bot.service` - systemd service configuration
-- `ecosystem.config.js` - PM2 configuration
-- `DEPLOYMENT_CHECKLIST.md` - Deployment checklist
+- Process manager (optional, for auto-restart on server)
 
 ## License
 
