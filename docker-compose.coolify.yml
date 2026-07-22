@@ -1,0 +1,75 @@
+# Parley on Coolify.
+#
+# Differences from the upstream docker-compose.yml:
+#   - no `env_file: .env` -- Coolify injects env vars directly
+#   - the dashboard port is not published to the host; Coolify's Traefik reaches
+#     the container over the shared network, so the domain is set on the `bot`
+#     service's Domains field as https://<host>:3000
+#   - TRUSTED_PROXY is set, since Traefik is a non-loopback proxy and Express
+#     otherwise mis-attributes client IPs (breaking login rate-limiting and the
+#     Secure cookie flag)
+services:
+  sidecar:
+    build:
+      context: .
+      dockerfile: stt_sidecar/Dockerfile
+    restart: unless-stopped
+    environment:
+      - STT_HOST=0.0.0.0
+      - STT_PORT=8000
+      # This host has no NVIDIA GPU; pin CPU int8 rather than paying for a
+      # failed CUDA init on every boot. Batching recovers some throughput.
+      - STT_DEVICE=${STT_DEVICE:-cpu}
+      - STT_COMPUTE=${STT_COMPUTE:-int8}
+      - STT_BATCH_SIZE=${STT_BATCH_SIZE:-8}
+    volumes:
+      # Whisper weights download on first transcription; keep them.
+      - whisper_models:/models
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    expose:
+      - '8000'
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      sidecar:
+        condition: service_healthy
+    environment:
+      # --- Discord (required) ---
+      - DISCORD_TOKEN=${DISCORD_TOKEN:?}
+      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID:?}
+
+      # --- Summarizer ---
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - OLLAMA_URL=${OLLAMA_URL:-http://127.0.0.1:11434}
+
+      # --- Infrastructure ---
+      - STT_URL=http://sidecar:8000
+      - DATA_DIR=/data
+      - WEB_UI=1
+      - WEB_UI_PORT=3000
+      - WEB_UI_HOST=0.0.0.0
+      # Express trust-proxy preset covering RFC1918 ranges, which is where the
+      # Coolify/Traefik network sits. A bare "1" would be parsed as an IP, not a
+      # hop count.
+      - TRUSTED_PROXY=${TRUSTED_PROXY:-uniquelocal}
+      - TZ=${TZ:-Etc/UTC}
+    volumes:
+      # SQLite db + per-meeting audio.
+      - parley_data:/data
+    expose:
+      - '3000'
+
+volumes:
+  parley_data:
+  whisper_models:
