@@ -64,6 +64,15 @@ services:
       # hop count.
       - TRUSTED_PROXY=${TRUSTED_PROXY:-uniquelocal}
       - TZ=${TZ:-Etc/UTC}
+
+      # --- Recordings (optional) ---
+      # Retention window for guilds with "Keep recordings" on (empty → 30 days,
+      # 0 = keep until deleted).
+      - AUDIO_RETENTION_DAYS=${AUDIO_RETENTION_DAYS:-}
+      # The dashboard's public URL (the Domains value on this service, e.g.
+      # https://parley.example.com). When set, Discord notes for keep-recordings
+      # guilds link back to the meeting page.
+      - WEB_PUBLIC_URL=${WEB_PUBLIC_URL:-}
     volumes:
       # SQLite db + per-meeting audio.
       - parley_data:/data
