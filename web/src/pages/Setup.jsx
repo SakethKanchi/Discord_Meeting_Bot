@@ -302,7 +302,7 @@ export default function Setup() {
     </Page>
   );
 
-  const { config: c, providers, sttProviders, channels, secrets = {} } = data;
+  const { config: c, providers, sttProviders, channels, voiceChannels = [], secrets = {} } = data;
   const save = async (patch) => {
     try {
       const r = await api.saveConfig(guildId, patch);
@@ -495,6 +495,31 @@ export default function Setup() {
         <Card title="Behavior">
           <Switch checked={c.autoJoin} onChange={(e) => save({ autoJoin: e.target.checked })}
             label="Auto-join voice" desc="Join automatically when two or more people are in a voice channel." />
+          {c.autoJoin && (
+            <Field label="Auto-join channels" hint="Only auto-join the selected voice channels. Leave all unchecked to auto-join any channel.">
+              {voiceChannels.length === 0 ? (
+                <p className="text-xs text-muted">No voice channels visible — the bot must be connected to this server.</p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto space-y-0.5 -mx-1 px-1">
+                  {voiceChannels.map((ch) => {
+                    const selected = (c.autoJoinChannelIds || []).includes(ch.id);
+                    return (
+                      <label key={ch.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface-2 cursor-pointer text-sm">
+                        <input type="checkbox" className="pcheck h-4 w-4" checked={selected}
+                          onChange={() => {
+                            const cur = c.autoJoinChannelIds || [];
+                            save({ autoJoinChannelIds: selected ? cur.filter((id) => id !== ch.id) : [...cur, ch.id] });
+                          }} />
+                        <span className="text-ink truncate">🔊 {ch.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </Field>
+          )}
+          <Switch checked={c.keepAudio} onChange={(e) => save({ keepAudio: e.target.checked })}
+            label="Keep recordings" desc="Store meeting audio and offer a WAV download on the meeting page (~2 MB per speaker-minute of disk)." />
         </Card>
       </div>
     </Page>

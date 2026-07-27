@@ -29,11 +29,26 @@ export function validateEnv(env = process.env) {
   return true;
 }
 
+// How long retained meeting audio (keep_audio guilds) survives before the
+// sweep purges it. 0 = keep until the meeting is deleted. Unset/empty/invalid
+// → default 30. Empty must NOT fall through to Number('') === 0, which would
+// silently turn "unconfigured" into "keep forever".
+export function resolveAudioRetentionDays(env = process.env) {
+  const raw = env.AUDIO_RETENTION_DAYS;
+  if (raw == null || String(raw).trim() === '') return 30;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 30;
+}
+
 export const config = {
   dataDir: resolveDataDir(),
   discordToken: process.env.DISCORD_TOKEN,
   discordClientId: process.env.DISCORD_CLIENT_ID,
   sttUrl: process.env.STT_URL || 'http://127.0.0.1:8000',
+  audioRetentionDays: resolveAudioRetentionDays(),
+  // Public base URL of the dashboard (e.g. https://parley.example.com). Only
+  // used to link Discord notes back to the meeting page; unset = no links.
+  webPublicUrl: (process.env.WEB_PUBLIC_URL || '').replace(/\/+$/, '') || null,
   gemini: { apiKey: process.env.GEMINI_API_KEY },
   openai: { apiKey: process.env.OPENAI_API_KEY, baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1' },
   opencode: { apiKey: process.env.OPENCODE_API_KEY, baseUrl: process.env.OPENCODE_BASE_URL || 'https://opencode.ai/zen/go/v1' },

@@ -1,8 +1,10 @@
 // src/web/api.js
 import { Router } from 'express';
 import { ChannelType } from 'discord.js';
-import { rm } from 'node:fs/promises';
+import { rm, stat } from 'node:fs/promises';
+import { createReadStream, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { ensureMixedWav } from '../voice/mix.js';
 import { getGuildConfig, setGuildConfig } from '../store/config.js';
 import { validateSetup, availableProviders } from '../commands/setup-logic.js';
 import { config as env } from '../config/env.js';
@@ -124,6 +126,8 @@ export function apiRouter({ db, bot = null, client = null, sidecar = null }) {
       attendees: db.listAttendees(id),
       utterances: db.listUtterances(id),
       retry: { eligible: RETRYABLE_STATUSES.has(meeting.status) && plan.ok, action: plan.action, reason: plan.reason || null },
+      // Recording kept for download (keep_audio guilds) and still on disk.
+      hasAudio: !!meeting.audio_retained && existsSync(audioDir(id)),
     });
   });
 
@@ -159,6 +163,33 @@ export function apiRouter({ db, bot = null, client = null, sidecar = null }) {
     }
     res.setHeader('Content-Disposition', `attachment; filename="meeting-${id}-${date}.json"`);
     res.json({ meeting, summary, attendees, utterances });
+  });
+
+  // Download a meeting's recording as one mixed WAV (per-speaker tracks summed
+  // on a shared timeline). Mixed lazily on first request and cached in the
+  // meeting's audio dir. Only exists for guilds with "keep recordings" on —
+  // otherwise the PCM was deleted right after the notes were posted.
+  r.get('/meetings/:id/audio', async (req, res) => {
+    const id = Number(req.params.id);
+    const meeting = db.getMeeting(id);
+    if (!meeting) return res.status(404).json({ error: 'meeting not found' });
+    // A live/processing meeting is still growing its track set; a mix made now
+    // would be partial AND get cached. Wait for the pipeline to finish.
+    if (meeting.status === 'recording' || meeting.status === 'processing') {
+      return res.status(409).json({ error: 'Meeting is still being recorded/processed — try again when it finishes.' });
+    }
+    try {
+      const wav = await ensureMixedWav(audioDir(id));
+      if (!wav) return res.status(404).json({ error: 'No audio is stored for this meeting.' });
+      const { size } = await stat(wav);
+      const date = (meeting.started_at || '').slice(0, 10);
+      res.setHeader('Content-Type', 'audio/wav');
+      res.setHeader('Content-Length', size);
+      res.setHeader('Content-Disposition', `attachment; filename="meeting-${id}-${date}.wav"`);
+      createReadStream(wav).pipe(res);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // Retry a failed/stuck meeting: re-summarize if the transcript survived, else
@@ -264,11 +295,17 @@ export function apiRouter({ db, bot = null, client = null, sidecar = null }) {
       ? [...guild.channels.cache.filter((c) => c.type === ChannelType.GuildText).values()]
           .map((c) => ({ id: c.id, name: c.name }))
       : [];
+    // Separate key so the notes-channel picker (text channels) stays untouched.
+    const voiceChannels = guild
+      ? [...guild.channels.cache.filter((c) => c.type === ChannelType.GuildVoice).values()]
+          .map((c) => ({ id: c.id, name: c.name }))
+      : [];
     res.json({
       config: getGuildConfig(db, req.params.g),
       providers: availableProviders(env),
       sttProviders: availableSttProviders(env),
       channels,
+      voiceChannels,
       models: MODEL_SUGGESTIONS,
       secrets: secretStatus(env),
     });

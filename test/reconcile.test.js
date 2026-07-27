@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb } from '../src/store/db.js';
-import { reconcileOnBoot } from '../src/store/reconcile.js';
+import { reconcileOnBoot, sweepAudioDirs } from '../src/store/reconcile.js';
 
 function tmp() {
   const dir = mkdtempSync(join(tmpdir(), 'parley-reconcile-'));
@@ -65,4 +65,63 @@ test('reconcileOnBoot is a no-op when the audio root does not exist', async () =
   const r = await reconcileOnBoot(db, '/nonexistent/parley/audio', { log: quiet });
   assert.equal(r.sweptDirs, 0);
   assert.equal(r.orphanMeetings, 0);
+});
+
+const DAY = 24 * 60 * 60 * 1000;
+
+function meetingWithAudio(db, audioRoot, { status = 'done', endedAt, retained = false } = {}) {
+  const id = db.createMeeting({ guildId: 'g', channelId: 'c', channelName: 'x', startedAt: 't' });
+  db.setMeetingStatus(id, status, endedAt);
+  if (retained) db.setAudioRetained(id, true);
+  const d = join(audioRoot, String(id));
+  mkdirSync(d, { recursive: true });
+  writeFileSync(join(d, 'u1_0.pcm'), 'x');
+  return id;
+}
+
+test('sweep keeps retained audio inside the retention window, purges expired', async () => {
+  const { dir, cleanup } = tmp();
+  try {
+    const db = openDb(':memory:');
+    const audioRoot = join(dir, 'audio');
+    const now = Date.parse('2026-07-27T00:00:00Z');
+    const fresh = meetingWithAudio(db, audioRoot, { endedAt: new Date(now - 1 * DAY).toISOString(), retained: true });
+    const stale = meetingWithAudio(db, audioRoot, { endedAt: new Date(now - 40 * DAY).toISOString(), retained: true });
+    const plainDone = meetingWithAudio(db, audioRoot, { endedAt: new Date(now - 1 * DAY).toISOString() });
+
+    const r = await sweepAudioDirs(db, audioRoot, { log: quiet, retentionDays: 30, now: () => now });
+    assert.equal(r.sweptDirs, 2);
+    assert.equal(existsSync(join(audioRoot, String(fresh))), true);   // retained, in window
+    assert.equal(existsSync(join(audioRoot, String(stale))), false);  // retained, expired
+    assert.equal(existsSync(join(audioRoot, String(plainDone))), false); // done, not retained
+    assert.equal(db.getMeeting(stale).audio_retained, 0); // flag cleared so UI stops offering it
+    assert.equal(db.getMeeting(fresh).audio_retained, 1);
+  } finally { cleanup(); }
+});
+
+test('retentionDays 0 keeps retained audio indefinitely', async () => {
+  const { dir, cleanup } = tmp();
+  try {
+    const db = openDb(':memory:');
+    const audioRoot = join(dir, 'audio');
+    const now = Date.parse('2026-07-27T00:00:00Z');
+    const ancient = meetingWithAudio(db, audioRoot, { endedAt: new Date(now - 900 * DAY).toISOString(), retained: true });
+
+    const r = await sweepAudioDirs(db, audioRoot, { log: quiet, retentionDays: 0, now: () => now });
+    assert.equal(r.sweptDirs, 0);
+    assert.equal(existsSync(join(audioRoot, String(ancient))), true);
+  } finally { cleanup(); }
+});
+
+test('retained audio with an unparsable timestamp is kept (fail safe)', async () => {
+  const { dir, cleanup } = tmp();
+  try {
+    const db = openDb(':memory:');
+    const audioRoot = join(dir, 'audio');
+    // started_at 't', no ended_at → unparsable; must not be swept by mistake.
+    const id = meetingWithAudio(db, audioRoot, { retained: true });
+    const r = await sweepAudioDirs(db, audioRoot, { log: quiet, retentionDays: 30 });
+    assert.equal(r.sweptDirs, 0);
+    assert.equal(existsSync(join(audioRoot, String(id))), true);
+  } finally { cleanup(); }
 });

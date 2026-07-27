@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS meetings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   guild_id TEXT, channel_id TEXT, channel_name TEXT,
   started_at TEXT, ended_at TEXT,
-  status TEXT NOT NULL DEFAULT 'recording'
+  status TEXT NOT NULL DEFAULT 'recording',
+  audio_retained INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS attendees (
   meeting_id INTEGER, user_id TEXT, display_name TEXT,
@@ -34,7 +35,8 @@ CREATE TABLE IF NOT EXISTS guild_config (
   summarizer_provider TEXT, summarizer_model TEXT,
   stt_provider TEXT, stt_model TEXT,
   whisper_model TEXT, notes_channel_id TEXT,
-  use_thread INTEGER, auto_join INTEGER, language TEXT, summary_language TEXT
+  use_thread INTEGER, auto_join INTEGER, language TEXT, summary_language TEXT,
+  auto_join_channel_ids TEXT, keep_audio INTEGER
 );
 CREATE TABLE IF NOT EXISTS guilds (
   guild_id TEXT PRIMARY KEY,
@@ -85,6 +87,18 @@ export function openDb(path) {
   const summaryCols = sql.prepare(`PRAGMA table_info(summaries)`).all();
   if (!summaryCols.some((c) => c.name === 'timings_json')) {
     sql.exec(`ALTER TABLE summaries ADD COLUMN timings_json TEXT`);
+  }
+  // Migration: auto-join channel allow-list (JSON array) + keep-recordings toggle.
+  if (!cols.some((c) => c.name === 'auto_join_channel_ids')) {
+    sql.exec(`ALTER TABLE guild_config ADD COLUMN auto_join_channel_ids TEXT`);
+  }
+  if (!cols.some((c) => c.name === 'keep_audio')) {
+    sql.exec(`ALTER TABLE guild_config ADD COLUMN keep_audio INTEGER`);
+  }
+  // Migration: per-meeting audio retention flag (audio kept for download).
+  const meetingCols = sql.prepare(`PRAGMA table_info(meetings)`).all();
+  if (!meetingCols.some((c) => c.name === 'audio_retained')) {
+    sql.exec(`ALTER TABLE meetings ADD COLUMN audio_retained INTEGER NOT NULL DEFAULT 0`);
   }
 
   return {
@@ -151,6 +165,9 @@ export function openDb(path) {
       // passed at 'done', so durations reflect recording time, not pipeline time.
       sql.prepare(`UPDATE meetings SET status = ?, ended_at = COALESCE(ended_at, ?) WHERE id = ?`)
         .run(status, endedAt, id);
+    },
+    setAudioRetained(id, retained) {
+      sql.prepare(`UPDATE meetings SET audio_retained = ? WHERE id = ?`).run(retained ? 1 : 0, id);
     },
     listRecent(guildId, limit = 10) {
       return sql.prepare(

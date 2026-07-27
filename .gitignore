@@ -59,3 +59,4 @@ audio/
 __pycache__/
 .venv/
 
+.serena/

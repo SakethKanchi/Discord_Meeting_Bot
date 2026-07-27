@@ -87,6 +87,44 @@ test('rejects openai STT when OPENAI_API_KEY missing', () => {
   assert.match(r.error, /OPENAI_API_KEY/);
 });
 
+// ── auto-join channel allow-list + keep-audio ────────────────────────────────
+
+test('accepts a valid autoJoinChannelIds list and dedupes it', () => {
+  const r = validateSetup({ autoJoinChannelIds: ['123456789012345678', '123456789012345678', '987654321098765432'] }, env);
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.patch.autoJoinChannelIds, ['123456789012345678', '987654321098765432']);
+});
+
+test('accepts an empty autoJoinChannelIds list (= any channel)', () => {
+  const r = validateSetup({ autoJoinChannelIds: [] }, env);
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.patch.autoJoinChannelIds, []);
+});
+
+test('rejects autoJoinChannelIds that is not an array', () => {
+  const r = validateSetup({ autoJoinChannelIds: '123456789012345678' }, env);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /array/i);
+});
+
+test('rejects autoJoinChannelIds containing a non-snowflake id', () => {
+  const r = validateSetup({ autoJoinChannelIds: ['123456789012345678', 'DROP TABLE'] }, env);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /invalid channel id/i);
+});
+
+test('rejects more than 25 autoJoinChannelIds', () => {
+  const ids = Array.from({ length: 26 }, (_, i) => String(100000000000000000n + BigInt(i)));
+  const r = validateSetup({ autoJoinChannelIds: ids }, env);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /too many/i);
+});
+
+test('accepts keepAudio boolean', () => {
+  assert.equal(validateSetup({ keepAudio: true }, env).patch.keepAudio, true);
+  assert.equal(validateSetup({ keepAudio: false }, env).patch.keepAudio, false);
+});
+
 test('accepts openai STT with key and a valid model', () => {
   const r = validateSetup({ sttProvider: 'openai', sttModel: 'whisper-1' }, { ...env, openai: { apiKey: 'k' } });
   assert.equal(r.ok, true);
