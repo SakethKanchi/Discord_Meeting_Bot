@@ -30,9 +30,13 @@ export function validateEnv(env = process.env) {
 }
 
 // How long retained meeting audio (keep_audio guilds) survives before the
-// sweep purges it. 0 = keep until the meeting is deleted. Invalid → default 30.
+// sweep purges it. 0 = keep until the meeting is deleted. Unset/empty/invalid
+// → default 30. Empty must NOT fall through to Number('') === 0, which would
+// silently turn "unconfigured" into "keep forever".
 export function resolveAudioRetentionDays(env = process.env) {
-  const n = Number(env.AUDIO_RETENTION_DAYS);
+  const raw = env.AUDIO_RETENTION_DAYS;
+  if (raw == null || String(raw).trim() === '') return 30;
+  const n = Number(raw);
   return Number.isFinite(n) && n >= 0 ? n : 30;
 }
 
