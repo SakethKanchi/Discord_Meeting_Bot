@@ -75,3 +75,36 @@ test('setGuildConfig persists sttProvider + sttModel', () => {
   assert.equal(c.sttModel, 'whisper-1');
   assert.equal(c.whisperModel, DEFAULTS.whisperModel); // sidecar model untouched
 });
+
+test('autoJoinChannelIds defaults to [] and round-trips a list', () => {
+  const db = openDb(':memory:');
+  assert.deepEqual(getGuildConfig(db, 'g').autoJoinChannelIds, []);
+  setGuildConfig(db, 'g', { autoJoinChannelIds: ['111', '222'] });
+  assert.deepEqual(getGuildConfig(db, 'g').autoJoinChannelIds, ['111', '222']);
+  // Clearing back to "any channel".
+  setGuildConfig(db, 'g', { autoJoinChannelIds: [] });
+  assert.deepEqual(getGuildConfig(db, 'g').autoJoinChannelIds, []);
+});
+
+test('autoJoinChannelIds survives unrelated updates', () => {
+  const db = openDb(':memory:');
+  setGuildConfig(db, 'g', { autoJoinChannelIds: ['111'] });
+  setGuildConfig(db, 'g', { language: 'de' });
+  assert.deepEqual(getGuildConfig(db, 'g').autoJoinChannelIds, ['111']);
+});
+
+test('malformed auto_join_channel_ids JSON falls back to []', () => {
+  const db = openDb(':memory:');
+  setGuildConfig(db, 'g', { autoJoin: true });
+  db.sql.prepare(`UPDATE guild_config SET auto_join_channel_ids = 'not json' WHERE guild_id = 'g'`).run();
+  assert.deepEqual(getGuildConfig(db, 'g').autoJoinChannelIds, []);
+});
+
+test('keepAudio defaults to false and round-trips both values', () => {
+  const db = openDb(':memory:');
+  assert.equal(getGuildConfig(db, 'g').keepAudio, false);
+  setGuildConfig(db, 'g', { keepAudio: true });
+  assert.equal(getGuildConfig(db, 'g').keepAudio, true);
+  setGuildConfig(db, 'g', { keepAudio: false });
+  assert.equal(getGuildConfig(db, 'g').keepAudio, false);
+});

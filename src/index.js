@@ -5,7 +5,7 @@
 import { join } from 'node:path';
 import { config, hasDiscordCreds } from './config/env.js';
 import { openDb } from './store/db.js';
-import { reconcileOnBoot } from './store/reconcile.js';
+import { reconcileOnBoot, sweepAudioDirs } from './store/reconcile.js';
 import { BotController } from './bot-controller.js';
 import { SidecarController } from './sidecar-controller.js';
 import { startWebServer } from './web/server.js';
@@ -16,7 +16,15 @@ const audioRoot = join(config.dataDir, 'audio');
 // Boot housekeeping BEFORE anything starts, so a crash mid-pipeline is recovered
 // even in web-only mode (no Discord creds): orphaned meetings become retryable
 // and stale audio dirs are swept. Best-effort — never block startup on it.
-await reconcileOnBoot(db, audioRoot).catch((e) => console.warn('[reconcile] skipped:', e.message));
+await reconcileOnBoot(db, audioRoot, { retentionDays: config.audioRetentionDays })
+  .catch((e) => console.warn('[reconcile] skipped:', e.message));
+
+// Retained recordings expire on a clock, and a long-running deployment may
+// never reboot — re-run the sweep daily so the retention window actually bites.
+setInterval(() => {
+  sweepAudioDirs(db, audioRoot, { retentionDays: config.audioRetentionDays })
+    .catch((e) => console.warn('[reconcile] daily sweep failed:', e.message));
+}, 24 * 60 * 60 * 1000).unref();
 
 const bot = new BotController({ db, audioRoot });
 // Local STT sidecar lifecycle (start/stop from the dashboard). No-op/unmanaged

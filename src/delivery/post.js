@@ -1,5 +1,6 @@
 import { ChannelType } from 'discord.js';
 import { renderNotes, chunk } from './discord-notes.js';
+import { config as env } from '../config/env.js';
 
 export async function postNotes({ client, meeting, cfg, notes, talktime }) {
   const channelId = cfg.notesChannelId || meeting.channel_id;
@@ -9,7 +10,13 @@ export async function postNotes({ client, meeting, cfg, notes, talktime }) {
   // instead of pretending the post succeeded with no trace.
   if (!channel) throw new Error(`Notes channel ${channelId} is unreachable (deleted or missing access).`);
 
-  const md = renderNotes(notes, talktime, { channelName: meeting.channel_name, date: meeting.started_at });
+  let md = renderNotes(notes, talktime, { channelName: meeting.channel_name, date: meeting.started_at });
+  // Guilds that keep recordings get a link to the meeting's dashboard page
+  // (login required), where the mixed WAV can be downloaded. Needs the
+  // operator to have set WEB_PUBLIC_URL — no URL, no link.
+  if (cfg.keepAudio && env.webPublicUrl) {
+    md += `\n\n🎧 Recording & full transcript: ${env.webPublicUrl}/meetings/${meeting.id}`;
+  }
   const parts = chunk(md);
 
   let target = channel;

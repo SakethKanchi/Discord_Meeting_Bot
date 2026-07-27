@@ -40,6 +40,8 @@ export const api = {
   meeting: (id) => fetch(`/api/meetings/${id}`).then(json),
   // Export URL for a download link/button (md or json). Not fetched via json().
   exportMeetingUrl: (id, format = 'md') => `/api/meetings/${id}/export?format=${format}`,
+  // Mixed-WAV recording download (only meetings with hasAudio). Plain <a href>.
+  audioUrl: (id) => `/api/meetings/${id}/audio`,
   todos: (g, { open, assignee } = {}) => {
     const p = new URLSearchParams();
     if (open) p.set('open', '1');

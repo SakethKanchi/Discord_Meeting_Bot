@@ -59,8 +59,14 @@ export function startBot({ db, audioRoot }) {
           summarizer: getSummarizer(cfg),
           deliver: async (notes, talktime) => postNotes({ client, meeting, cfg, notes, talktime }),
         });
-        // Success: delete the meeting's audio. On failure we keep the PCM for manual retry.
-        await rm(session.audioDir, { recursive: true, force: true }).catch(() => {});
+        // Success: delete the meeting's audio — unless this guild keeps
+        // recordings for download. Empty meetings (nobody spoke) always drop
+        // their audio; on failure we keep the PCM for manual retry either way.
+        if (result?.empty || !cfg.keepAudio) {
+          await rm(session.audioDir, { recursive: true, force: true }).catch(() => {});
+        } else {
+          db.setAudioRetained(meetingId, true);
+        }
         // Nobody spoke — drop the empty meeting record entirely.
         if (result?.empty) db.deleteMeeting(meetingId);
         // Summary succeeded but posting didn't (perms/deleted channel): the notes
@@ -249,8 +255,8 @@ export function startBot({ db, audioRoot }) {
     const cfg = getGuildConfig(db, guild.id);
     const connected = manager.isActive(guild.id, channel.id);
     const count = humanCount(channel);
-    debugLog(`[vSU] guild=${guild.id} channel=${channel.id} user=${newState.id} old=${oldState.channelId} new=${newState.channelId} humans=${count} connected=${connected} autoJoin=${cfg.autoJoin}`);
-    if (shouldAutoJoin({ humanCount: count, autoJoin: cfg.autoJoin, connected })) {
+    debugLog(`[vSU] guild=${guild.id} channel=${channel.id} user=${newState.id} old=${oldState.channelId} new=${newState.channelId} humans=${count} connected=${connected} autoJoin=${cfg.autoJoin} allowed=${cfg.autoJoinChannelIds.length ? cfg.autoJoinChannelIds.join(',') : 'any'}`);
+    if (shouldAutoJoin({ humanCount: count, autoJoin: cfg.autoJoin, connected, channelId: channel.id, allowedChannelIds: cfg.autoJoinChannelIds })) {
       debugLog(`[vSU] auto-join triggered for ${channel.id}`);
       await joinAndStart(channel).catch((e) => console.error('auto-join failed:', e.message));
     } else if (shouldAutoLeave({ humanCount: count, connected })) {
@@ -362,6 +368,7 @@ export function startBot({ db, audioRoot }) {
           notesChannelId: interaction.options.getChannel('notes_channel')?.id,
           useThread: interaction.options.getBoolean('thread') ?? undefined,
           autoJoin: interaction.options.getBoolean('autojoin') ?? undefined,
+          keepAudio: interaction.options.getBoolean('keep_audio') ?? undefined,
           language: interaction.options.getString('language') ?? undefined,
           summary_language: interaction.options.getString('summary_language') ?? undefined,
         };

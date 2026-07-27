@@ -116,7 +116,8 @@ A fully self-hosted alternative to Otter/Fathom/Fireflies, built for Discord. Au
 - **Self-host in one command.** `docker compose up -d` runs the bot, the whisper sidecar, and the dashboard together. No public IP or port forwarding needed.
 - **Searchable history.** `/history`, `/summary`, `/raw`, and full-text `/search` over every past meeting, backed by SQLite FTS5.
 - **Resilient.** A failed track doesn't sink the meeting (per-track error tolerance), the bot recovers from voice disconnects, and failed transcriptions or summaries are retryable with one click from the dashboard (or the CLI).
-- **Auto join/leave.** Joins when 2+ people are talking, leaves when the room empties. Shows `[REC]` in its nickname while recording.
+- **Auto join/leave.** Joins when 2+ people are talking, leaves when the room empties. Shows `[REC]` in its nickname while recording. Optionally restrict auto-join to **specific voice channels** (Settings → Behavior).
+- **Downloadable recordings (opt-in).** Turn on **Keep recordings** and each meeting's per-speaker audio is mixed into a single WAV you can download from the meeting page, kept for a configurable retention window.
 - **Concurrent meetings.** Records multiple channels/servers at once — no global single-recording limit.
 
 ## ⚙️ How it works
@@ -307,7 +308,7 @@ pm2 save
 | `/search <keyword>` | Full-text search across all meeting transcripts |
 | `/setup` | Configure the bot for this server (admin only) |
 
-**Auto join/leave:** the bot joins automatically when more than one human is in a voice channel and leaves when one or zero remain. Toggle with `/setup autojoin`.
+**Auto join/leave:** the bot joins automatically when more than one human is in a voice channel and leaves when one or zero remain. Toggle with `/setup autojoin`. To limit auto-join to specific voice channels, pick them in the dashboard under **Settings → Behavior** (leave the list empty to allow any channel); `/join` always works regardless of the list.
 
 ## 🎛️ Configuration
 
@@ -323,6 +324,7 @@ pm2 save
 | `notes_channel` | Text channel where notes are posted (defaults to the meeting's channel) |
 | `thread` | Post notes in a thread (default: on) |
 | `autojoin` | Auto-join when 2+ people are in voice |
+| `keep_audio` | Keep meeting recordings for download from the dashboard (default: off) |
 | `language` | Spoken language (German, English, …) or `auto`-detect |
 | `summary_language` | Language for the notes/summary (default English), or `Match transcription` |
 
@@ -353,6 +355,7 @@ Every backend returns the same `{ text, words }` shape with word-level timestamp
 - The bot shows `[REC]` in its nickname whenever a recording is active, so every member can see it.
 - With the default local sidecar, audio is transcribed **on the machine running the bot** — no audio leaves your network, and with Ollama as the summarizer nothing does at all. If you choose a **cloud** transcription provider (OpenAI), meeting audio is sent to that provider for transcription; only the final transcript text is sent to your chosen summarizer.
 - Recording people's voices is subject to consent laws that vary by jurisdiction (some require all-party consent). **You are responsible for obtaining consent from all participants.**
+- By default audio is **deleted seconds after the notes are posted** — only the transcript is kept. If a server enables **Keep recordings**, the audio stays on disk (under `DATA_DIR/audio`) and is downloadable from the dashboard as a mixed WAV until the retention window expires (`AUDIO_RETENTION_DAYS`, default 30; `0` keeps it until the meeting is deleted). Budget ~2 MB of disk per speaker-minute, and make sure participants know recordings are being retained.
 
 ## Web dashboard (local)
 

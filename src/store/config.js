@@ -7,6 +7,8 @@ export const DEFAULTS = {
   notesChannelId: null,
   useThread: true,
   autoJoin: true,
+  autoJoinChannelIds: [],
+  keepAudio: false,
   language: 'auto',
   summaryLanguage: 'en',
 };
@@ -20,9 +22,21 @@ const COLS = {
   notesChannelId: 'notes_channel_id',
   useThread: 'use_thread',
   autoJoin: 'auto_join',
+  autoJoinChannelIds: 'auto_join_channel_ids',
+  keepAudio: 'keep_audio',
   language: 'language',
   summaryLanguage: 'summary_language',
 };
+
+// auto_join_channel_ids is a JSON-encoded array of channel id strings; anything
+// unparsable falls back to [] (= no restriction, join any channel).
+function parseIdList(raw) {
+  if (raw == null) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch { return []; }
+}
 
 function fromRow(row) {
   return {
@@ -34,6 +48,8 @@ function fromRow(row) {
     notesChannelId: row.notes_channel_id ?? DEFAULTS.notesChannelId,
     useThread: row.use_thread == null ? DEFAULTS.useThread : !!row.use_thread,
     autoJoin: row.auto_join == null ? DEFAULTS.autoJoin : !!row.auto_join,
+    autoJoinChannelIds: parseIdList(row.auto_join_channel_ids),
+    keepAudio: row.keep_audio == null ? DEFAULTS.keepAudio : !!row.keep_audio,
     language: row.language ?? DEFAULTS.language,
     summaryLanguage: row.summary_language ?? DEFAULTS.summaryLanguage,
   };
@@ -52,8 +68,8 @@ export function setGuildConfig(db, guildId, patch) {
   const merged = { ...current, ...safePatch, guildId };
   db.sql.prepare(
     `INSERT OR REPLACE INTO guild_config
-       (guild_id, summarizer_provider, summarizer_model, stt_provider, stt_model, whisper_model, notes_channel_id, use_thread, auto_join, language, summary_language)
-     VALUES (@guildId, @summarizerProvider, @summarizerModel, @sttProvider, @sttModel, @whisperModel, @notesChannelId, @useThread, @autoJoin, @language, @summaryLanguage)`
+       (guild_id, summarizer_provider, summarizer_model, stt_provider, stt_model, whisper_model, notes_channel_id, use_thread, auto_join, auto_join_channel_ids, keep_audio, language, summary_language)
+     VALUES (@guildId, @summarizerProvider, @summarizerModel, @sttProvider, @sttModel, @whisperModel, @notesChannelId, @useThread, @autoJoin, @autoJoinChannelIds, @keepAudio, @language, @summaryLanguage)`
   ).run({
     guildId,
     summarizerProvider: merged.summarizerProvider,
@@ -64,6 +80,8 @@ export function setGuildConfig(db, guildId, patch) {
     notesChannelId: merged.notesChannelId,
     useThread: merged.useThread ? 1 : 0,
     autoJoin: merged.autoJoin ? 1 : 0,
+    autoJoinChannelIds: JSON.stringify(merged.autoJoinChannelIds || []),
+    keepAudio: merged.keepAudio ? 1 : 0,
     language: merged.language,
     summaryLanguage: merged.summaryLanguage,
   });

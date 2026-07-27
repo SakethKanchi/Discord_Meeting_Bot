@@ -89,9 +89,13 @@ export async function retryMeeting(db, meetingId, { dataDir, deliver = null } = 
   try {
     const { notes, empty } = await processMeeting(db, meetingId, { tracks, cfg, deliver });
     // Success (or a confirmed-empty meeting): the PCM has served its purpose, so
-    // drop the audio dir. The bot's own finalize does this too, but a retry runs
-    // outside that path and would otherwise leak the directory forever.
-    await rm(audioDir, { recursive: true, force: true }).catch(() => {});
+    // drop the audio dir — unless this guild keeps recordings (mirrors the bot's
+    // finalize). Empty meetings always drop their audio.
+    if (empty || !cfg.keepAudio) {
+      await rm(audioDir, { recursive: true, force: true }).catch(() => {});
+    } else {
+      db.setAudioRetained(meetingId, true);
+    }
     return { ok: true, action: 'retranscribe', status: db.getMeeting(meetingId)?.status, empty: !notes || !!empty };
   } catch (err) {
     // Keep the PCM on failure so a later retry can try again.

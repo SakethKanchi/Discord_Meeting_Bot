@@ -36,6 +36,7 @@ export function buildCommands() {
       .addChannelOption((o) => o.setName('notes_channel').setDescription('Where to post notes').addChannelTypes(ChannelType.GuildText))
       .addBooleanOption((o) => o.setName('thread').setDescription('Post notes in a thread'))
       .addBooleanOption((o) => o.setName('autojoin').setDescription('Auto-join when 2+ people are in voice'))
+      .addBooleanOption((o) => o.setName('keep_audio').setDescription('Keep meeting recordings for download from the dashboard'))
       .addStringOption((o) => o.setName('language').setDescription('Spoken language (pick German to fix DE/EN mixing)')
         .addChoices(...LANGUAGES.map((l) => ({ name: l.name, value: l.code })), { name: 'Auto-detect', value: 'auto' }))
       .addStringOption((o) => o.setName('summary_language').setDescription('Language for the notes/summary')
@@ -74,8 +75,8 @@ export const COMMAND_CATALOG = [
   { name: 'search', category: 'Notes', admin: false, args: '<keyword>',
     summary: 'Full-text search across every past meeting transcript.' },
   { name: 'setup', category: 'Configuration', admin: true,
-    args: '[provider] [model] [stt_provider] [stt_model] [whisper_model] [notes_channel] [thread] [autojoin] [language] [summary_language]',
+    args: '[provider] [model] [stt_provider] [stt_model] [whisper_model] [notes_channel] [thread] [autojoin] [keep_audio] [language] [summary_language]',
     summary: 'Configure the bot for this server (admin only).',
-    detail: 'Set the summarizer provider/model, the speech-to-text provider (local sidecar or OpenAI) and model, notes channel, threading, auto-join, and languages. You can also do all of this from this dashboard under Settings.' },
+    detail: 'Set the summarizer provider/model, the speech-to-text provider (local sidecar or OpenAI) and model, notes channel, threading, auto-join, recording retention, and languages. You can also do all of this from this dashboard under Settings — restricting auto-join to specific voice channels is dashboard-only.' },
 ];
 ;

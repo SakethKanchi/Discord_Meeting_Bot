@@ -60,6 +60,23 @@ export function validateSetup(input, env) {
   if (input.notesChannelId !== undefined) patch.notesChannelId = input.notesChannelId;
   if (input.useThread !== undefined) patch.useThread = !!input.useThread;
   if (input.autoJoin !== undefined) patch.autoJoin = !!input.autoJoin;
+  if (input.keepAudio !== undefined) patch.keepAudio = !!input.keepAudio;
+
+  // Voice channels auto-join is restricted to. Empty array = any channel.
+  // Set from the dashboard (slash options can't express a multi-select).
+  if (input.autoJoinChannelIds !== undefined) {
+    if (!Array.isArray(input.autoJoinChannelIds)) {
+      return { ok: false, error: 'autoJoinChannelIds must be an array of voice channel ids.' };
+    }
+    const ids = [...new Set(input.autoJoinChannelIds.map((v) => String(v)))];
+    if (ids.some((id) => !/^\d{5,25}$/.test(id))) {
+      return { ok: false, error: 'autoJoinChannelIds contains an invalid channel id.' };
+    }
+    if (ids.length > 25) {
+      return { ok: false, error: 'Too many auto-join channels (max 25).' };
+    }
+    patch.autoJoinChannelIds = ids;
+  }
   if (input.language !== undefined) {
     if (!LANGUAGE_CODES.has(input.language)) {
       return { ok: false, error: `Invalid language. Use one of: ${[...LANGUAGE_CODES].join(', ')}.` };

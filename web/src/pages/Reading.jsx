@@ -188,8 +188,8 @@ function AskBox({ guildId, meetingId }) {
   );
 }
 
-/* ── meeting actions (delete / merge / export) ─────────────────────────── */
-function MeetingActions({ meeting, meetings }) {
+/* ── meeting actions (delete / merge / export / audio) ─────────────────── */
+function MeetingActions({ meeting, meetings, hasAudio }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState(false); // false | 'pick' | 'busy'
@@ -226,6 +226,12 @@ function MeetingActions({ meeting, meetings }) {
             className="w-full flex items-center gap-2.5 text-left px-3 py-2 text-sm text-ink hover:bg-surface-2 no-underline">
             <Icon.Download width={15} height={15} /> Export (markdown)
           </a>
+          {hasAudio && (
+            <a href={api.audioUrl(meeting.id)} role="menuitem" onClick={() => setOpen(false)}
+              className="w-full flex items-center gap-2.5 text-left px-3 py-2 text-sm text-ink hover:bg-surface-2 no-underline">
+              <Icon.Download width={15} height={15} /> Download audio (WAV)
+            </a>
+          )}
           <button role="menuitem" onClick={() => { setMode('pick'); setOpen(false); }} disabled={others.length === 0}
             className="w-full flex items-center gap-2.5 text-left px-3 py-2 text-sm text-ink hover:bg-surface-2 disabled:opacity-40">
             <Icon.Merge width={15} height={15} /> Merge another meeting
@@ -311,7 +317,7 @@ function Note({ data, todos, guildId, meetings, refetchTodos, onReload }) {
               {attendees?.length > 0 && <span className="inline-flex items-center gap-1.5"><Icon.Users width={14} height={14} />{attendees.length} attendees</span>}
             </p>
           </div>
-          <MeetingActions meeting={meeting} meetings={meetings} />
+          <MeetingActions meeting={meeting} meetings={meetings} hasAudio={data.hasAudio} />
         </div>
 
         {attendees?.length > 0 && (

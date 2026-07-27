@@ -13,10 +13,10 @@ test('search command has a required keyword option', () => {
   assert.equal(opt.required, true);
 });
 
-test('setup command exposes provider/model/stt/whisper/thread/autojoin/channel/language/summary_language options', () => {
+test('setup command exposes provider/model/stt/whisper/thread/autojoin/keep_audio/channel/language/summary_language options', () => {
   const setup = commandsJSON().find((c) => c.name === 'setup');
   const names = setup.options.map((o) => o.name).sort();
-  assert.deepEqual(names, ['autojoin', 'language', 'model', 'notes_channel', 'provider', 'stt_model', 'stt_provider', 'summary_language', 'thread', 'whisper_model']);
+  assert.deepEqual(names, ['autojoin', 'keep_audio', 'language', 'model', 'notes_channel', 'provider', 'stt_model', 'stt_provider', 'summary_language', 'thread', 'whisper_model']);
 });
 
 test('stt_provider option offers sidecar and openai choices', () => {
