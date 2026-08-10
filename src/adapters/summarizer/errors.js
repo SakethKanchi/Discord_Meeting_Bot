@@ -32,7 +32,7 @@ export function describeSummarizerError(err, provider = 'the model') {
   switch (status) {
     case 401:
     case 403:
-      return `Authentication failed (${status}). The ${provider} API key is invalid or lacks access — check the key in .env.`;
+      return `Authentication failed (${status}). The ${provider} API key is invalid or lacks access — check the key in .env.${raw ? ` Provider said: ${raw}` : ''}`;
     case 429:
       return `Quota or rate limit hit (429) on ${provider}. You may be out of API credits, or requests are going too fast — check your provider's billing/quota.`;
     case 500:
