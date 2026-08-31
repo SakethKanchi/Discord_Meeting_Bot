@@ -2,13 +2,12 @@
 
 ## Now
 
-Summarizer fallback is implemented, configurable from `/setup` and the web
-Settings page, tested (291/291 suite green), browser-verified, and live.
+Summarizer fallback is live. The two remaining pipeline gaps are closed:
+relative transcript timestamps, and a coverage target in `SUMMARY_PROMPT`.
 Guild `1362914118918602893` runs **primary `opencode:glm-5.3`, fallback
 `gemini:gemini-2.5-flash`**.
 
-No blocking work outstanding. Remaining items are the two optional fixes under
-Known gaps (prompt density target, `formatMs` epoch timestamps).
+No blocking work outstanding.
 
 ## Locked decisions
 
@@ -31,31 +30,16 @@ Known gaps (prompt density target, `formatMs` epoch timestamps).
 
 ## Changed this session
 
-New: `src/adapters/summarizer/fallback.js`, `test/summarizer-fallback.test.js`.
-Modified: `src/adapters/summarizer/index.js` (split out `createAdapter`, compose
-fallback), `src/store/config.js` (+2 fields), `src/store/db.js` (+2 columns,
-schema + migration), `src/pipeline/orchestrator.js`, `src/pipeline/retry.js` and
-`src/web/api.js` merge path (truthful `model_used`; don't clobber a `userMessage`
-the wrapper already set).
+`buildTranscript` subtracts the first utterance's `startMs` before `formatMs`,
+so lines stamp `[00:00]`…`[85:47]` instead of `[29803170:09]`. Verified against
+meeting 83's 488 real utterances. Empty input returns `''`.
 
-Fallback exposed in the UI: `src/commands/setup-logic.js` (validation, `none`
-clears, model defaults to the provider's first suggestion), `src/commands/definitions.js`
-(`fallback_provider` / `fallback_model` options), `src/bot.js` (option mapping),
-`web/src/pages/Setup.jsx` (Fallback field in the Summarizer card), plus
-`test/setup-logic.test.js` and `test/definitions.test.js`.
-
-Unrelated pre-existing uncommitted work was already in the tree on arrival and
-was not touched.
+`SUMMARY_PROMPT` now requires coverage to scale with the meeting (every distinct
+subject is a topic; do not collapse a long meeting into 2–3 topics) and specific
+points. Density lives in topics/decisions/openQuestions/actionItems, not the tldr.
 
 ## Known gaps
 
-- Nothing blocking. The `/setup` wiring gap is closed.
-- `SUMMARY_PROMPT` has no length/coverage target, so summary density is entirely
-  at the model's discretion. This is the root cause of the meeting-83
-  under-summarization and it still affects long meetings on any provider.
-- `buildTranscript` feeds absolute epoch `startMs` into `formatMs`, which expects
-  a relative offset, so every transcript line is stamped `[29803170:09]` instead
-  of `[00:09]`. The model gets no usable timing signal. One-line fix, untaken.
 - Gemini's project spend cap was exhausted on 2026-08-31 and is the reason
   meeting 83 originally failed. Assumed to reset at the calendar-UTC month
   boundary; not verified. If it still 429s afterward, raise the cap at

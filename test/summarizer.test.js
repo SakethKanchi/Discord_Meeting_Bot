@@ -15,6 +15,8 @@ test('normalizeNotes fills missing fields from empty shape', () => {
 test('SUMMARY_PROMPT instructs JSON output with action item assignees', () => {
   assert.match(SUMMARY_PROMPT, /JSON/);
   assert.match(SUMMARY_PROMPT, /assignee/);
+  assert.match(SUMMARY_PROMPT, /every distinct subject/);
+  assert.match(SUMMARY_PROMPT, /Do not collapse a long meeting/);
 });
 
 test('FakeSummarizer returns a valid normalized shape', async () => {
