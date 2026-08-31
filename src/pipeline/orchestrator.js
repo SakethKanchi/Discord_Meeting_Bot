@@ -78,7 +78,9 @@ export async function processMeeting(db, meetingId, opts) {
     notes = await summarizer.summarize(transcript, meta);
   } catch (err) {
     db.setMeetingStatus(meetingId, 'summary_failed');
-    err.userMessage = describeSummarizerError(err, opts.cfg.summarizerProvider);
+    // FallbackSummarizer already composed a message naming both attempts; don't
+    // overwrite it with one that only mentions the primary provider.
+    err.userMessage ??= describeSummarizerError(err, opts.cfg.summarizerProvider);
     throw err;
   }
   const summarizeMs = Date.now() - summarizeStart;
@@ -86,9 +88,16 @@ export async function processMeeting(db, meetingId, opts) {
   const timings = { transcribeMs, summarizeMs, tracks: opts.tracks.length };
   console.log(`[pipeline] meeting ${meetingId}: transcribe ${transcribeMs}ms (${opts.tracks.length} tracks), summarize ${summarizeMs}ms`);
 
-  const modelUsed = `${opts.cfg.summarizerProvider}:${opts.cfg.summarizerModel || ''}`;
+  // summarizer.lastUsed is set by FallbackSummarizer to whichever provider
+  // actually produced these notes; plain adapters leave it undefined.
+  const modelUsed = summarizer.lastUsed ?? `${opts.cfg.summarizerProvider}:${opts.cfg.summarizerModel || ''}`;
   db.saveSummary(meetingId, notes, talktime, modelUsed, new Date().toISOString(), timings);
-  db.seedTodos(meetingId, meeting.guild_id, notes.actionItems || []);
+  // Seed createdAt from the MEETING date, not now(): a pipeline that runs long
+  // (long transcription queue) would otherwise stamp today onto a meeting that
+  // started hours ago, so the action items collapse onto the wrong day in the
+  // timeline view. (Mirrors what db.backfillTodos + realignTodoDates already do
+  // for backfilled rows.)
+  db.seedTodos(meetingId, meeting.guild_id, notes.actionItems || [], meeting.started_at);
   db.setMeetingStatus(meetingId, 'done', new Date().toISOString());
 
   // Delivery is the last step and runs AFTER the summary is safely persisted, so

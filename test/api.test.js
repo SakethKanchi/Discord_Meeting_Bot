@@ -80,6 +80,9 @@ test('GET config returns providers + PATCH validates', async () => {
   try {
     const cfg = await (await fetch(`${base}/api/guilds/g1/config`)).json();
     assert.ok(Array.isArray(cfg.providers));
+    assert.ok(cfg.providers.some((p) => p.provider === 'openrouter'));
+    assert.equal('openrouter' in (cfg.secrets || {}), true);
+    assert.ok(Array.isArray(cfg.models?.openrouter) && cfg.models.openrouter.includes('openai/gpt-4o-mini'));
     assert.equal(cfg.config.summarizerProvider, 'gemini'); // default
 
     // invalid provider rejected with 400

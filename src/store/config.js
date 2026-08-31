@@ -1,6 +1,10 @@
 export const DEFAULTS = {
   summarizerProvider: 'gemini',
   summarizerModel: 'gemini-2.5-flash',
+  // null = no fallback; when set, getSummarizer wraps the primary so one
+  // provider outage doesn't fail a meeting whose transcript is already intact.
+  summarizerFallbackProvider: null,
+  summarizerFallbackModel: null,
   sttProvider: 'sidecar',
   sttModel: null,
   whisperModel: 'small',
@@ -14,6 +18,8 @@ export const DEFAULTS = {
 const COLS = {
   summarizerProvider: 'summarizer_provider',
   summarizerModel: 'summarizer_model',
+  summarizerFallbackProvider: 'summarizer_fallback_provider',
+  summarizerFallbackModel: 'summarizer_fallback_model',
   sttProvider: 'stt_provider',
   sttModel: 'stt_model',
   whisperModel: 'whisper_model',
@@ -28,6 +34,8 @@ function fromRow(row) {
   return {
     summarizerProvider: row.summarizer_provider ?? DEFAULTS.summarizerProvider,
     summarizerModel: row.summarizer_model ?? DEFAULTS.summarizerModel,
+    summarizerFallbackProvider: row.summarizer_fallback_provider ?? DEFAULTS.summarizerFallbackProvider,
+    summarizerFallbackModel: row.summarizer_fallback_model ?? DEFAULTS.summarizerFallbackModel,
     sttProvider: row.stt_provider ?? DEFAULTS.sttProvider,
     sttModel: row.stt_model ?? DEFAULTS.sttModel,
     whisperModel: row.whisper_model ?? DEFAULTS.whisperModel,
@@ -52,12 +60,14 @@ export function setGuildConfig(db, guildId, patch) {
   const merged = { ...current, ...safePatch, guildId };
   db.sql.prepare(
     `INSERT OR REPLACE INTO guild_config
-       (guild_id, summarizer_provider, summarizer_model, stt_provider, stt_model, whisper_model, notes_channel_id, use_thread, auto_join, language, summary_language)
-     VALUES (@guildId, @summarizerProvider, @summarizerModel, @sttProvider, @sttModel, @whisperModel, @notesChannelId, @useThread, @autoJoin, @language, @summaryLanguage)`
+       (guild_id, summarizer_provider, summarizer_model, summarizer_fallback_provider, summarizer_fallback_model, stt_provider, stt_model, whisper_model, notes_channel_id, use_thread, auto_join, language, summary_language)
+     VALUES (@guildId, @summarizerProvider, @summarizerModel, @summarizerFallbackProvider, @summarizerFallbackModel, @sttProvider, @sttModel, @whisperModel, @notesChannelId, @useThread, @autoJoin, @language, @summaryLanguage)`
   ).run({
     guildId,
     summarizerProvider: merged.summarizerProvider,
     summarizerModel: merged.summarizerModel,
+    summarizerFallbackProvider: merged.summarizerFallbackProvider,
+    summarizerFallbackModel: merged.summarizerFallbackModel,
     sttProvider: merged.sttProvider,
     sttModel: merged.sttModel,
     whisperModel: merged.whisperModel,

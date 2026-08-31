@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS summaries (
 CREATE TABLE IF NOT EXISTS guild_config (
   guild_id TEXT PRIMARY KEY,
   summarizer_provider TEXT, summarizer_model TEXT,
+  summarizer_fallback_provider TEXT, summarizer_fallback_model TEXT,
   stt_provider TEXT, stt_model TEXT,
   whisper_model TEXT, notes_channel_id TEXT,
   use_thread INTEGER, auto_join INTEGER, language TEXT, summary_language TEXT
@@ -87,6 +88,14 @@ export function openDb(path) {
   }
   if (!cols.some((c) => c.name === 'stt_model')) {
     sql.exec(`ALTER TABLE guild_config ADD COLUMN stt_model TEXT`);
+  }
+  // Migration: add summarizer fallback columns to dbs created before they
+  // existed. NULL means "no fallback", preserving single-provider behaviour.
+  if (!cols.some((c) => c.name === 'summarizer_fallback_provider')) {
+    sql.exec(`ALTER TABLE guild_config ADD COLUMN summarizer_fallback_provider TEXT`);
+  }
+  if (!cols.some((c) => c.name === 'summarizer_fallback_model')) {
+    sql.exec(`ALTER TABLE guild_config ADD COLUMN summarizer_fallback_model TEXT`);
   }
   // Migration: add per-stage timing metrics to dbs created before this column
   // existed (Measurement section of the speed plan).

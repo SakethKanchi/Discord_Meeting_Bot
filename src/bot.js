@@ -356,6 +356,8 @@ export function startBot({ db, audioRoot }) {
         const input = {
           provider: interaction.options.getString('provider') ?? undefined,
           model: interaction.options.getString('model') ?? undefined,
+          fallbackProvider: interaction.options.getString('fallback_provider') ?? undefined,
+          fallbackModel: interaction.options.getString('fallback_model') ?? undefined,
           sttProvider: interaction.options.getString('stt_provider') ?? undefined,
           sttModel: interaction.options.getString('stt_model') ?? undefined,
           whisperModel: interaction.options.getString('whisper_model') ?? undefined,

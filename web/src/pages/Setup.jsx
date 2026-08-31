@@ -13,13 +13,18 @@ const SUMMARY_LANGS = [['match', 'Match transcription'], ...LANGS.filter(([c]) =
 
 const PROVIDER_DEFAULTS = {
   gemini: 'gemini-2.5-flash', openai: 'gpt-4o-mini', ollama: 'llama3', opencode: 'deepseek-v4-flash',
+  openrouter: 'openai/gpt-4o-mini',
 };
 // Providers whose key is editable from the UI (Ollama is keyless/local).
-const KEYED = { gemini: 'GEMINI_API_KEY', openai: 'OPENAI_API_KEY', opencode: 'OPENCODE_API_KEY' };
+const KEYED = {
+  gemini: 'GEMINI_API_KEY', openai: 'OPENAI_API_KEY', opencode: 'OPENCODE_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
+};
 const KEY_HELP = {
   gemini: 'aistudio.google.com/apikey',
   openai: 'platform.openai.com/api-keys',
   opencode: 'opencode.ai/zen',
+  openrouter: 'openrouter.ai/keys',
 };
 // Which env secret each STT provider needs (sidecar is keyless/local).
 const STT_KEY = { openai: 'openai' };
@@ -267,6 +272,7 @@ export default function Setup() {
   const [msg, setMsg] = useState('');
   const [msgErr, setMsgErr] = useState(false);
   const [modelDraft, setModelDraft] = useState('');
+  const [fbModelDraft, setFbModelDraft] = useState('');
   const [models, setModels] = useState([]); // suggestions for current provider
   // "Draft" providers: when you pick a cloud provider that has no API key yet,
   // we stage the choice (reveal its key field) WITHOUT saving — saving would be
@@ -278,6 +284,7 @@ export default function Setup() {
   function reload() { if (guildId) api.config(guildId).then(setData).catch(() => setData(null)); }
   useEffect(() => { reload(); }, [guildId]);
   useEffect(() => { if (data?.config) setModelDraft(data.config.summarizerModel); }, [data?.config?.summarizerModel]);
+  useEffect(() => { if (data?.config) setFbModelDraft(data.config.summarizerFallbackModel || ''); }, [data?.config?.summarizerFallbackModel]);
 
   // Fetch the live model list whenever the provider changes (incl. Ollama tags).
   const provider = data?.config?.summarizerProvider;
@@ -408,6 +415,32 @@ export default function Setup() {
                     className={`chip hover:!bg-surface-2 transition-colors ${m === c.summarizerModel ? '!bg-primary-soft !text-ink' : ''}`}>{m}</button>
                 ))}
               </div>
+            )}
+          </Field>
+          )}
+
+          {/* Only providers with a working key are offered: validateSetup rejects
+              a keyless fallback server-side, so listing them would just error. */}
+          {!sumDraft && (
+          <Field label="Fallback" hint="Tried only if the primary fails (quota cap, outage, region block). Choose none to disable.">
+            <div className="relative">
+              <select className={sel} value={c.summarizerFallbackProvider || 'none'}
+                onChange={(e) => save({ fallbackProvider: e.target.value })}>
+                <option value="none">none</option>
+                {providers.filter((p) => p.ok && p.provider !== c.summarizerProvider).map((p) => (
+                  <option key={p.provider} value={p.provider}>{p.provider}</option>
+                ))}
+              </select>
+              <Chevron />
+            </div>
+            {c.summarizerFallbackProvider && (
+              <input className="input mt-2" value={fbModelDraft} placeholder="Fallback model id…"
+                onChange={(e) => setFbModelDraft(e.target.value)}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (v && v !== c.summarizerFallbackModel) save({ fallbackModel: v });
+                  else if (!v) setFbModelDraft(c.summarizerFallbackModel || '');
+                }} />
             )}
           </Field>
           )}

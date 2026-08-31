@@ -64,16 +64,17 @@ export async function retryMeeting(db, meetingId, { dataDir, deliver = null } = 
     };
     db.setMeetingStatus(meetingId, 'processing');
     let notes;
+    const summarizer = getSummarizer(cfg);
     try {
-      notes = await getSummarizer(cfg).summarize(transcript, meta);
+      notes = await summarizer.summarize(transcript, meta);
     } catch (err) {
       db.setMeetingStatus(meetingId, 'summary_failed');
       return { ok: false, action: 'resummarize', status: 'summary_failed',
-        reason: describeSummarizerError(err, cfg.summarizerProvider) };
+        reason: err.userMessage ?? describeSummarizerError(err, cfg.summarizerProvider) };
     }
     db.clearSummary(meetingId);
-    db.saveSummary(meetingId, notes, talktime, `${cfg.summarizerProvider}:${cfg.summarizerModel || ''}`);
-    db.seedTodos(meetingId, meeting.guild_id, notes.actionItems || []);
+    db.saveSummary(meetingId, notes, talktime, summarizer.lastUsed ?? `${cfg.summarizerProvider}:${cfg.summarizerModel || ''}`);
+    db.seedTodos(meetingId, meeting.guild_id, notes.actionItems || [], meeting.started_at);
     db.setMeetingStatus(meetingId, 'done', new Date().toISOString());
     if (deliver) await deliver(notes, talktime, meta).catch(() => {});
     return { ok: true, action: 'resummarize', status: 'done' };

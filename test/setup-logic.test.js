@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateSetup } from '../src/commands/setup-logic.js';
 
-const env = { gemini: { apiKey: 'g' }, openai: { apiKey: '' }, opencode: { apiKey: '' }, ollama: { url: 'http://x' }, sttUrl: 'http://127.0.0.1:8000' };
+const env = { gemini: { apiKey: 'g' }, openai: { apiKey: '' }, opencode: { apiKey: '' }, openrouter: { apiKey: '' }, ollama: { url: 'http://x' }, sttUrl: 'http://127.0.0.1:8000' };
 
 test('accepts gemini when key present', () => {
   const r = validateSetup({ provider: 'gemini', model: 'gemini-2.5-flash' }, env);
@@ -27,6 +27,19 @@ test('accepts opencode when key present', () => {
   assert.equal(r.ok, true);
   assert.equal(r.patch.summarizerProvider, 'opencode');
   assert.equal(r.patch.summarizerModel, 'gpt-5.5');
+});
+
+test('rejects openrouter when key missing', () => {
+  const r = validateSetup({ provider: 'openrouter', model: 'openai/gpt-4o-mini' }, env);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /OPENROUTER_API_KEY/);
+});
+
+test('accepts openrouter when key present', () => {
+  const r = validateSetup({ provider: 'openrouter', model: 'anthropic/claude-sonnet-4' }, { ...env, openrouter: { apiKey: 'k' } });
+  assert.equal(r.ok, true);
+  assert.equal(r.patch.summarizerProvider, 'openrouter');
+  assert.equal(r.patch.summarizerModel, 'anthropic/claude-sonnet-4');
 });
 
 test('rejects unknown provider', () => {
@@ -110,4 +123,44 @@ test('rejects openai STT when OPENAI_API_KEY missing', () => {
   const r = validateSetup({ sttProvider: 'openai' }, env);
   assert.equal(r.ok, false);
   assert.match(r.error, /OPENAI_API_KEY/);
+});
+
+test('accepts a fallback provider whose key is present', () => {
+  const r = validateSetup({ fallbackProvider: 'gemini', fallbackModel: 'gemini-2.5-flash' }, env);
+  assert.equal(r.ok, true);
+  assert.equal(r.patch.summarizerFallbackProvider, 'gemini');
+  assert.equal(r.patch.summarizerFallbackModel, 'gemini-2.5-flash');
+});
+
+test('rejects a fallback provider whose key is missing', () => {
+  const r = validateSetup({ fallbackProvider: 'openrouter' }, env);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /OPENROUTER_API_KEY/);
+});
+
+test('rejects an unknown fallback provider', () => {
+  const r = validateSetup({ fallbackProvider: 'bogus' }, env);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /Unknown fallback provider/);
+});
+
+test('"none" clears both fallback fields', () => {
+  const r = validateSetup({ fallbackProvider: 'none' }, env);
+  assert.equal(r.ok, true);
+  assert.equal(r.patch.summarizerFallbackProvider, null);
+  assert.equal(r.patch.summarizerFallbackModel, null);
+});
+
+test('a fallback provider with no model defaults to that provider\'s first suggestion', () => {
+  const r = validateSetup({ fallbackProvider: 'gemini' }, env);
+  assert.equal(r.ok, true);
+  assert.equal(r.patch.summarizerFallbackModel, 'gemini-2.5-flash',
+    'must not inherit the outgoing provider\'s model id');
+});
+
+test('fallback model alone updates only the model', () => {
+  const r = validateSetup({ fallbackModel: 'glm-5.3' }, env);
+  assert.equal(r.ok, true);
+  assert.equal(r.patch.summarizerFallbackModel, 'glm-5.3');
+  assert.equal('summarizerFallbackProvider' in r.patch, false);
 });

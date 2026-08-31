@@ -225,10 +225,11 @@ export function apiRouter({ db, bot = null, client = null, sidecar = null }) {
       summaryLanguage: resolveSummaryLanguage(cfg),
     };
     try {
-      const notes = await getSummarizer(cfg).summarize(transcript, meta);
+      const summarizer = getSummarizer(cfg);
+      const notes = await summarizer.summarize(transcript, meta);
       db.clearSummary(targetId);
-      db.saveSummary(targetId, notes, talktime, `${cfg.summarizerProvider}:${cfg.summarizerModel || ''}`);
-      db.seedTodos(targetId, target.guild_id, notes.actionItems || []);
+      db.saveSummary(targetId, notes, talktime, summarizer.lastUsed ?? `${cfg.summarizerProvider}:${cfg.summarizerModel || ''}`);
+      db.seedTodos(targetId, target.guild_id, notes.actionItems || [], target.started_at);
     } catch (e) {
       // Data is already merged; surface the summarize failure but don't unwind.
       return res.status(502).json({ error: e.message, merged });
@@ -248,7 +249,7 @@ export function apiRouter({ db, bot = null, client = null, sidecar = null }) {
     res.json(db.listAssignees(req.params.g));
   });
 
-  r.patch('/todos/:id', (req, res) => {
+  r.patch('/todos/:id', requireAdmin, (req, res) => {
     db.setTodoDone(Number(req.params.id), !!req.body.done);
     res.json({ ok: true });
   });

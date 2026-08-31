@@ -27,6 +27,15 @@ export const MODEL_SUGGESTIONS = {
     'glm-5.1',
     'qwen3.7-max',
   ],
+  // OpenRouter gateway — ids are vendor-namespaced. Full list at
+  // https://openrouter.ai/models
+  openrouter: [
+    'openai/gpt-4o-mini',
+    'anthropic/claude-sonnet-4',
+    'google/gemini-2.5-flash',
+    'meta-llama/llama-3.3-70b-instruct',
+    'deepseek/deepseek-chat',
+  ],
   // Fallbacks when a live Ollama tag query isn't available.
   ollama: [
     'llama3.1',

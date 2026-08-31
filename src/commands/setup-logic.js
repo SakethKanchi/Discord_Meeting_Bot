@@ -1,4 +1,5 @@
 import { SUPPORTED_PROVIDERS } from '../adapters/summarizer/index.js';
+import { MODEL_SUGGESTIONS } from '../adapters/summarizer/models.js';
 import { LANGUAGE_CODES, SUMMARY_LANGUAGE_VALUES } from '../adapters/summarizer/languages.js';
 import { STT_PROVIDERS, STT_MODELS, sttProviderReady } from '../adapters/stt/index.js';
 
@@ -8,6 +9,7 @@ export function providerKeyPresent(provider, env) {
   if (provider === 'gemini') return { ok: !!env.gemini.apiKey, missing: 'GEMINI_API_KEY' };
   if (provider === 'openai') return { ok: !!env.openai.apiKey, missing: 'OPENAI_API_KEY' };
   if (provider === 'opencode') return { ok: !!env.opencode.apiKey, missing: 'OPENCODE_API_KEY' };
+  if (provider === 'openrouter') return { ok: !!env.openrouter.apiKey, missing: 'OPENROUTER_API_KEY' };
   if (provider === 'ollama') return { ok: !!env.ollama.url, missing: 'OLLAMA_URL' };
   return { ok: false, missing: null };
 }
@@ -23,6 +25,28 @@ export function validateSetup(input, env) {
     if (!key.ok) return { ok: false, error: `Cannot use ${input.provider}: ${key.missing} is not set in .env.` };
     patch.summarizerProvider = input.provider;
     if (input.model) patch.summarizerModel = input.model;
+  }
+
+  // Optional second summarizer, tried only when the primary throws. 'none' (or
+  // an empty value) clears it and restores single-provider behaviour.
+  if (input.fallbackProvider !== undefined) {
+    const fb = input.fallbackProvider;
+    if (fb === null || fb === '' || fb === 'none') {
+      patch.summarizerFallbackProvider = null;
+      patch.summarizerFallbackModel = null;
+    } else {
+      if (!SUPPORTED_PROVIDERS.includes(fb)) {
+        return { ok: false, error: `Unknown fallback provider "${fb}". Use one of: ${SUPPORTED_PROVIDERS.join(', ')}, none.` };
+      }
+      const key = providerKeyPresent(fb, env);
+      if (!key.ok) return { ok: false, error: `Cannot use ${fb} as fallback: ${key.missing} is not set in .env.` };
+      patch.summarizerFallbackProvider = fb;
+      // Default to this provider's first suggested model rather than inheriting
+      // the outgoing provider's model id, which would be meaningless to it.
+      patch.summarizerFallbackModel = input.fallbackModel || MODEL_SUGGESTIONS[fb]?.[0] || null;
+    }
+  } else if (input.fallbackModel !== undefined) {
+    patch.summarizerFallbackModel = input.fallbackModel || null;
   }
 
   if (input.whisperModel !== undefined) {

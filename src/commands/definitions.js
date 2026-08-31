@@ -27,6 +27,9 @@ export function buildCommands() {
       .addStringOption((o) => o.setName('provider').setDescription('Summarizer provider')
         .addChoices(...SUPPORTED_PROVIDERS.map((p) => ({ name: p, value: p }))))
       .addStringOption((o) => o.setName('model').setDescription('Summarizer model name'))
+      .addStringOption((o) => o.setName('fallback_provider').setDescription('Backup summarizer used only if the primary fails')
+        .addChoices(...SUPPORTED_PROVIDERS.map((p) => ({ name: p, value: p })), { name: 'none', value: 'none' }))
+      .addStringOption((o) => o.setName('fallback_model').setDescription('Backup summarizer model name'))
       .addStringOption((o) => o.setName('stt_provider').setDescription('Speech-to-text provider')
         .addChoices(...STT_PROVIDERS.map((p) => ({ name: p, value: p }))))
       .addStringOption((o) => o.setName('stt_model').setDescription('Cloud STT model (OpenAI)')
@@ -74,8 +77,8 @@ export const COMMAND_CATALOG = [
   { name: 'search', category: 'Notes', admin: false, args: '<keyword>',
     summary: 'Full-text search across every past meeting transcript.' },
   { name: 'setup', category: 'Configuration', admin: true,
-    args: '[provider] [model] [stt_provider] [stt_model] [whisper_model] [notes_channel] [thread] [autojoin] [language] [summary_language]',
+    args: '[provider] [model] [fallback_provider] [fallback_model] [stt_provider] [stt_model] [whisper_model] [notes_channel] [thread] [autojoin] [language] [summary_language]',
     summary: 'Configure the bot for this server (admin only).',
-    detail: 'Set the summarizer provider/model, the speech-to-text provider (local sidecar or OpenAI) and model, notes channel, threading, auto-join, and languages. You can also do all of this from this dashboard under Settings.' },
+    detail: 'Set the summarizer provider/model, an optional fallback summarizer used only when the primary fails (set fallback_provider to "none" to disable), the speech-to-text provider (local sidecar or OpenAI) and model, notes channel, threading, auto-join, and languages. You can also do all of this from this dashboard under Settings.' },
 ];
 ;
