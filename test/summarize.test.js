@@ -18,6 +18,19 @@ test('buildTranscript sorts by startMs and labels speakers', () => {
   assert.equal(t, '[00:00] Bob: first\n[00:02] Alice: second\n[00:05] Alice: third word here');
 });
 
+test('buildTranscript stamps relative to the first utterance, not epoch', () => {
+  const origin = 1_788_190_209_302;
+  const t = buildTranscript([
+    { displayName: 'Joy', startMs: origin, endMs: origin + 900, text: 'hey' },
+    { displayName: 'Ahmad', startMs: origin + 65_000, endMs: origin + 66_000, text: 'hi' },
+  ]);
+  assert.equal(t, '[00:00] Joy: hey\n[01:05] Ahmad: hi');
+});
+
+test('buildTranscript of no utterances is empty', () => {
+  assert.equal(buildTranscript([]), '');
+});
+
 test('computeTalkTime aggregates ms, words, pct per speaker', () => {
   const stats = computeTalkTime(utterances);
   const alice = stats.find((s) => s.displayName === 'Alice');

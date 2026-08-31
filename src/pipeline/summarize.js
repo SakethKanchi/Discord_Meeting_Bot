@@ -6,9 +6,11 @@ export function formatMs(ms) {
 }
 
 export function buildTranscript(utterances) {
-  return [...utterances]
-    .sort((a, b) => a.startMs - b.startMs)
-    .map((u) => `[${formatMs(u.startMs)}] ${u.displayName}: ${u.text}`)
+  if (!utterances.length) return '';
+  const sorted = [...utterances].sort((a, b) => a.startMs - b.startMs);
+  const origin = sorted[0].startMs;
+  return sorted
+    .map((u) => `[${formatMs(u.startMs - origin)}] ${u.displayName}: ${u.text}`)
     .join('\n');
 }
 
