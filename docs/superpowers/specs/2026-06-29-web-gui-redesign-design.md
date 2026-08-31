@@ -21,6 +21,18 @@ Research findings that drive this redesign:
 Parley wrinkle: it **already posts notes into Discord**, so the web app is not the
 note-delivery surface — its job is a calm browse / search / configure archive.
 
+**Capture-model note (drives feature priorities):** Granola's signature interaction
+is *note-while-you-talk* — the human writes, AI enhances. Parley has no human
+note-taking surface: it auto-captures Discord voice and auto-emits notes +
+auto-assigned action items. That is **Circleback's / Fathom's model**, not
+Granola's. So borrow Granola's *layout* (thin meetings rail + single-column
+reading note) but follow Circleback's *feature model*: topic-grouped notes,
+an Action-items view scoped by assignee, and **natural-language Q&A over a
+meeting** — which both genre leaders (Circleback's archive query, Otter Chat,
+Granola chat) now treat as core, not optional. The enhance-my-notes /
+gray-AI-text-vs-user-text interaction is deliberately NOT mimicked (no human
+notes exist to enhance).
+
 ## Decisions (locked in brainstorm)
 
 1. **Cross-meeting action items:** a dedicated "Action items" page, defaults to
@@ -31,7 +43,15 @@ note-delivery surface — its job is a calm browse / search / configure archive.
    selected guild. Note is the hero; a thin left sidebar is the meetings rail +
    search field.
 3. **Theme:** **dark by default** (brand-consistent with the dark landing page),
-   with a **light reading toggle**, persisted in `localStorage`.
+   with a **light reading toggle**, persisted in `localStorage`. (Note: the genre
+   leaders are all light/reading-first; dark-default is a brand choice the light
+   toggle covers.)
+4. **Ask this meeting (natural-language Q&A):** an ask box inside the reading view.
+   Question + the meeting's transcript go to the guild's configured summarizer
+   provider; answer rendered inline. Reuses the existing summarizer adapters (new
+   `ask()` text-completion path) and per-guild provider config. Single-meeting
+   scope in v1 (archive-wide query deferred). No keys cross the API — same provider
+   plumbing as summarization.
 
 ## Information Architecture
 
@@ -76,7 +96,8 @@ Header (the entire top-level nav): wordmark · guild picker · theme toggle (☾
   pane: renders the active meeting note. On `/` with no id, redirects to the latest
   meeting. The note rendering (TL;DR lede, topics, decisions, open questions,
   action-item checkboxes, collapsible transcript, talk-time) is the restyled
-  successor of `MeetingDetail.jsx`.
+  successor of `MeetingDetail.jsx`. Includes an **"Ask this meeting"** box
+  (POST `…/meetings/:id/ask`) rendering the answer inline.
 - `pages/ActionItems.jsx` (new, replaces `Todos.jsx`) — cross-meeting list, default
   open-only, `Assignee ▾` dropdown (populated from a new assignees endpoint), each
   item checkable (PATCH) and linking to its source meeting.
@@ -112,12 +133,19 @@ the 127.0.0.1 server) stays exactly as merged. Add only:
    optional `assignee` filter (exact match; `assignee` of `null`/"Unassigned"
    selectable). Keep the existing `{open}` behavior and the existing call sites
    working (assignee optional).
-2. `db.listAssignees(guildId)` (new) — distinct non-deleted assignees for a guild
-   (including a marker for unassigned), newest-activity or alphabetical order, for
-   the dropdown.
+2. `db.listAssignees(guildId)` (new) — distinct assignees for a guild's todos
+   (NULL surfaced as the "Unassigned" marker), alphabetical, for the dropdown.
 3. API: `GET /api/guilds/:g/todos` gains an optional `&assignee=` query param;
    `GET /api/guilds/:g/assignees` (new) returns `[string|null]` (or `[{assignee}]`).
-4. Frontend `api.js`: `todos(guildId, {open, assignee})` and `assignees(guildId)`.
+4. **Ask-AI:** add `ask(prompt)` (plain-text completion) to each summarizer adapter
+   (`gemini/openai/opencode/ollama`, plus `fake` for tests) and an `askMeeting({cfg,
+   env, question, transcript, meta})` helper in `src/adapters/summarizer/ask.js`
+   that builds a transcript-grounded prompt and dispatches via the existing
+   `getSummarizer(cfg, env)`. New endpoint `POST /api/guilds/:g/meetings/:id/ask`
+   `{question}` → `{answer}`; uses the meeting's guild config for the provider,
+   404 unknown meeting, 400 empty question, 502 on provider error.
+5. Frontend `api.js`: `todos(guildId, {open, assignee})`, `assignees(guildId)`,
+   `ask(meetingId, question)`.
 
 No keys cross the API; 127.0.0.1-only; validateSetup remains the only config-write
 path. These invariants are unchanged.
@@ -135,7 +163,9 @@ path. These invariants are unchanged.
 
 Auth / multi-user · websockets / live indicator · external-tool export
 (Notion/Linear) — noted by research as the category's eventual action-item workflow,
-but deferred · manual todo creation · per-item due dates · analytics.
+but deferred · manual todo creation · per-item due dates · analytics ·
+**archive-wide Q&A / chat** (v1 ask is single-meeting only) · streaming ask
+responses · ask conversation history (each ask is one-shot, stateless).
 
 ## Deferred v1 follow-ups folded into this work where cheap
 
