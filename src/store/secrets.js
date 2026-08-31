@@ -4,7 +4,7 @@
 // (DATA_DIR/.env so they persist across restarts) and applied to the in-memory
 // `config` singleton so changes take effect without an env reload:
 //
-//   • Provider API keys      — GEMINI/OPENAI/OPENCODE_API_KEY  (secret: presence-only)
+//   • Provider API keys      — GEMINI/OPENAI/OPENCODE/OPENROUTER_API_KEY  (secret: presence-only)
 //   • Connection settings    — DISCORD_TOKEN, DISCORD_CLIENT_ID, STT_URL
 //
 // Security: the web server binds 127.0.0.1 only. Secret values (API keys, the
@@ -17,12 +17,13 @@ import { existsSync } from 'node:fs';
 import { config, resolveEnvFile } from '../config/env.js';
 
 // provider -> { env: ENV_VAR_NAME, apply(config, value) }
-// Covers summarizer keys (gemini/openai/opencode); openai's key is shared by
-// its summarizer and its cloud STT provider.
+// Covers summarizer keys (gemini/openai/opencode/openrouter); openai's key is
+// shared by its summarizer and its cloud STT provider.
 const PROVIDER_SECRETS = {
   gemini: { env: 'GEMINI_API_KEY', apply: (c, v) => { c.gemini.apiKey = v; } },
   openai: { env: 'OPENAI_API_KEY', apply: (c, v) => { c.openai.apiKey = v; } },
   opencode: { env: 'OPENCODE_API_KEY', apply: (c, v) => { c.opencode.apiKey = v; } },
+  openrouter: { env: 'OPENROUTER_API_KEY', apply: (c, v) => { c.openrouter.apiKey = v; } },
 };
 
 // Core connection settings. `secret: true` means the value is never returned to
@@ -43,6 +44,7 @@ export function secretStatus(env = config) {
     gemini: !!env.gemini.apiKey,
     openai: !!env.openai.apiKey,
     opencode: !!env.opencode.apiKey,
+    openrouter: !!env.openrouter.apiKey,
   };
 }
 
@@ -107,7 +109,7 @@ async function persistEnv(key, value, envPath) {
 /**
  * Set (or clear) a provider's API key. Updates the in-memory config immediately
  * and persists to the env file. Returns the new secretStatus.
- *   provider: 'gemini' | 'openai' | 'opencode'
+ *   provider: 'gemini' | 'openai' | 'opencode' | 'openrouter'
  *   value: string key, or '' to clear.
  */
 export async function setProviderKey(provider, value, { env = config, envPath = resolveEnvFile() } = {}) {

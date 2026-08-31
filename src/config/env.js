@@ -37,5 +37,6 @@ export const config = {
   gemini: { apiKey: process.env.GEMINI_API_KEY },
   openai: { apiKey: process.env.OPENAI_API_KEY, baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1' },
   opencode: { apiKey: process.env.OPENCODE_API_KEY, baseUrl: process.env.OPENCODE_BASE_URL || 'https://opencode.ai/zen/go/v1' },
+  openrouter: { apiKey: process.env.OPENROUTER_API_KEY, baseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1' },
   ollama: { url: process.env.OLLAMA_URL || 'http://127.0.0.1:11434' },
 };

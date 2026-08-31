@@ -36,8 +36,31 @@ export function createWebServer({ db, bot = null, client = null, sidecar = null 
   return app;
 }
 
-export function startWebServer({ db, bot = null, client = null, sidecar = null, port = 3000, host = process.env.WEB_UI_HOST || '127.0.0.1' }) {
+const FALLBACK_ATTEMPTS = 10;
+
+export function startWebServer({ db, bot = null, client = null, sidecar = null, port = 3000, host = process.env.WEB_UI_HOST || '127.0.0.1', maxAttempts = FALLBACK_ATTEMPTS }) {
   db.backfillTodos();
   const app = createWebServer({ db, bot, client, sidecar });
-  return app.listen(port, host);
+  return listenWithFallback(app, port, host, maxAttempts);
+}
+
+// Bind preferred port; on EADDRINUSE walk +1 up to maxAttempts. Port 0
+// (OS-assigned) is a single shot — incrementing it would try privileged ports.
+function listenWithFallback(app, port, host, maxAttempts) {
+  return new Promise((resolve, reject) => {
+    const tryListen = (candidate, remaining) => {
+      const server = app.listen(candidate, host);
+      server.once('listening', () => resolve(server));
+      server.once('error', (err) => {
+        server.close();
+        if (err.code === 'EADDRINUSE' && candidate !== 0 && remaining > 1) {
+          console.warn(`[web] port ${candidate} in use, trying ${candidate + 1}`);
+          tryListen(candidate + 1, remaining - 1);
+        } else {
+          reject(err);
+        }
+      });
+    };
+    tryListen(port, maxAttempts);
+  });
 }

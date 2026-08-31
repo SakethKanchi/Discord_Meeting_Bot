@@ -16,5 +16,6 @@ import { startWebServer } from '../src/web/server.js';
 const dataDir = resolveDataDir();
 const db = openDb(join(dataDir, 'meetings.db'));
 const port = Number(process.env.WEB_UI_PORT) || 3000;
-startWebServer({ db, bot: null, client: null, port });
-console.log(`[web:standalone] API + UI on http://127.0.0.1:${port} (db: ${join(dataDir, 'meetings.db')})`);
+const server = await startWebServer({ db, bot: null, client: null, port });
+const bound = server.address().port;
+console.log(`[web:standalone] API + UI on http://127.0.0.1:${bound} (db: ${join(dataDir, 'meetings.db')})`);

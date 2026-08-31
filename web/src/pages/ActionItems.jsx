@@ -67,6 +67,7 @@ export default function ActionItems() {
   const [person, setPerson] = useState(ALL); // ALL | null(unassigned) | name
   const [showDone, setShowDone] = useState(false);
   const [version, setVersion] = useState(0);
+  const [toggleErr, setToggleErr] = useState(null);
 
   useEffect(() => { setPerson(ALL); setShowDone(false); }, [guildId]);
 
@@ -80,7 +81,10 @@ export default function ActionItems() {
     return () => { stale = true; };
   }, [guildId, showDone, version]);
 
-  async function toggle(t) { await api.setTodoDone(t.id, !t.done); setVersion((v) => v + 1); }
+  async function toggle(t) {
+    try { await api.setTodoDone(t.id, !t.done); setVersion((v) => v + 1); setToggleErr(null); }
+    catch (e) { setToggleErr(e?.status === 403 ? 'Only admins can edit action items.' : (e?.message || 'Could not update')); }
+  }
 
   const { canon, people, hasUnassigned } = useMemo(() => {
     const raw = []; let unassigned = false;
@@ -121,6 +125,9 @@ export default function ActionItems() {
       />
 
       {/* Person filter chips */}
+      {toggleErr && (
+        <p role="alert" className="text-xs text-error bg-error-soft rounded-sm px-3 py-2 mb-4">{toggleErr}</p>
+      )}
       <div className="flex items-center gap-2 mb-5 flex-wrap">
         <button onClick={() => setPerson(ALL)} className={`chip ${person === ALL ? '!bg-primary-soft !text-ink' : ''}`}>
           Everyone <span className="text-faint">{todos.length}</span>

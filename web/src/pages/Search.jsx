@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useGuild } from '../GuildContext.jsx';
@@ -7,15 +7,19 @@ import { Avatar, Icon, Empty } from '../components/ui.jsx';
 
 function highlight(text, q) {
   if (!q) return text;
-  const idx = text.toLowerCase().indexOf(q.toLowerCase());
-  if (idx === -1) return text;
-  return (
-    <>
-      {text.slice(0, idx)}
-      <mark>{text.slice(idx, idx + q.length)}</mark>
-      {text.slice(idx + q.length)}
-    </>
-  );
+  const needle = q.toLowerCase();
+  const hay = text.toLowerCase();
+  const out = [];
+  let i = 0, idx = hay.indexOf(needle, i);
+  let k = 0;
+  while (idx !== -1) {
+    if (idx > i) out.push(<Fragment key={k++}>{text.slice(i, idx)}</Fragment>);
+    out.push(<mark key={k++}>{text.slice(idx, idx + q.length)}</mark>);
+    i = idx + q.length;
+    idx = hay.indexOf(needle, i);
+  }
+  if (i < text.length) out.push(<Fragment key={k++}>{text.slice(i)}</Fragment>);
+  return out.length ? out : text;
 }
 
 function ResultRow({ row, q }) {

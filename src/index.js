@@ -29,8 +29,14 @@ const webEnabled = process.env.WEB_UI !== '0' && process.env.WEB_UI !== 'false';
 if (webEnabled) {
   const port = Number(process.env.WEB_UI_PORT) || 3000;
   const host = process.env.WEB_UI_HOST || '127.0.0.1';
-  startWebServer({ db, bot, sidecar, port, host });
-  console.log(`[web] dashboard on http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}`);
+  try {
+    const server = await startWebServer({ db, bot, sidecar, port, host });
+    const bound = server.address().port;
+    console.log(`[web] dashboard on http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${bound}`);
+  } catch (e) {
+    console.error(`[web] failed to bind ${host}:${port}:`, e.message);
+    process.exit(1);
+  }
   // Loud warning if we're reachable off-box while an account still uses the
   // seeded default password — that combination is a full-takeover risk.
   if (host !== '127.0.0.1' && host !== 'localhost' && defaultPasswordActive(db)) {

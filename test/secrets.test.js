@@ -26,6 +26,7 @@ test('isSecretProvider only true for keyed providers', () => {
   assert.equal(isSecretProvider('gemini'), true);
   assert.equal(isSecretProvider('openai'), true);
   assert.equal(isSecretProvider('opencode'), true);
+  assert.equal(isSecretProvider('openrouter'), true);
   assert.equal(isSecretProvider('ollama'), false);
   assert.equal(isSecretProvider('fake'), false);
 });
@@ -35,7 +36,7 @@ test('setProviderKey updates live config + persists to .env, and clears it', asy
   const envPath = join(dir, '.env');
   writeFileSync(envPath, 'DISCORD_TOKEN=x\nGEMINI_API_KEY=\n');
   // Fake in-memory config mirroring src/config/env.js shape.
-  const env = { gemini: { apiKey: undefined }, openai: {}, opencode: {} };
+  const env = { gemini: { apiKey: undefined }, openai: {}, opencode: {}, openrouter: {} };
 
   let status = await setProviderKey('gemini', '  my-key  ', { env, envPath });
   assert.equal(env.gemini.apiKey, 'my-key'); // trimmed + applied live
@@ -103,7 +104,7 @@ test('setProviderKey rejects a value with embedded newlines (.env injection)', a
   const dir = mkdtempSync(join(tmpdir(), 'parley-inject-'));
   const envPath = join(dir, '.env');
   writeFileSync(envPath, 'OPENAI_API_KEY=\n');
-  const env = { gemini: {}, openai: { apiKey: 'safe' }, opencode: {} };
+  const env = { gemini: {}, openai: { apiKey: 'safe' }, opencode: {}, openrouter: {} };
   await assert.rejects(
     () => setProviderKey('openai', 'x\nOPENAI_BASE_URL=https://evil.example/v1', { env, envPath }),
     /control characters/,

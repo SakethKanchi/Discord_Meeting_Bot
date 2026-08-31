@@ -11,5 +11,6 @@ const dataDir = resolveDataDir();
 const db = openDb(join(dataDir, 'meetings.db'));
 const sidecar = new SidecarController({ sttUrl: config.sttUrl });
 const port = Number(process.env.WEB_UI_PORT) || 3000;
-startWebServer({ db, bot: null, sidecar, port, host: '127.0.0.1' });
-console.log(`[web:standalone+stt] http://127.0.0.1:${port} (sidecar managed=${sidecar.managed()})`);
+const server = await startWebServer({ db, bot: null, sidecar, port, host: '127.0.0.1' });
+const bound = server.address().port;
+console.log(`[web:standalone+stt] http://127.0.0.1:${bound} (sidecar managed=${sidecar.managed()})`);
