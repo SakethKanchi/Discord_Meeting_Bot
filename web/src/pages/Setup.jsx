@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { useGuild } from '../GuildContext.jsx';
 import { useSystem } from '../SystemContext.jsx';
 import { Page, PageHead } from '../components/Page.jsx';
 import { Icon, Empty } from '../components/ui.jsx';
+import { ModelPicker } from '../components/ModelPicker.jsx';
 import { ConnectionForm, BotStatusBadge } from '../components/Connection.jsx';
 
 const WHISPER = ['tiny', 'base', 'small', 'medium', 'large-v3', 'large-v3-turbo'];
@@ -11,10 +12,8 @@ const LANGS = [['auto', 'Auto-detect'], ['en', 'English'], ['de', 'German'], ['e
   ['it', 'Italian'], ['pt', 'Portuguese'], ['nl', 'Dutch'], ['ru', 'Russian'], ['ja', 'Japanese'], ['zh', 'Chinese']];
 const SUMMARY_LANGS = [['match', 'Match transcription'], ...LANGS.filter(([c]) => c !== 'auto')];
 
-const PROVIDER_DEFAULTS = {
-  gemini: 'gemini-2.5-flash', openai: 'gpt-4o-mini', ollama: 'llama3', opencode: 'deepseek-v4-flash',
-  openrouter: 'openai/gpt-4o-mini',
-};
+// Model defaults come from the server (adapters/summarizer/models.js) so the
+// dashboard, /setup and the adapters can't drift apart.
 // Providers whose key is editable from the UI (Ollama is keyless/local).
 const KEYED = {
   gemini: 'GEMINI_API_KEY', openai: 'OPENAI_API_KEY', opencode: 'OPENCODE_API_KEY',
@@ -32,6 +31,23 @@ const STT_HELP = {
   sidecar: 'Runs the local faster-whisper container. Free and fully offline, but uses your CPU.',
   openai: 'OpenAI (or any OpenAI-compatible) transcription endpoint.',
 };
+// The provider's model catalog, fetched live (and re-fetchable with refresh,
+// which bypasses the server's cache). `seq` drops responses that land after the
+// provider already changed.
+function useCatalog(provider) {
+  const [state, setState] = useState({ catalog: null, loading: !!provider });
+  const seq = useRef(0);
+  const load = useCallback((refresh) => {
+    const mine = ++seq.current;
+    if (!provider) { setState({ catalog: null, loading: false }); return; }
+    setState((s) => ({ ...s, loading: true }));
+    api.providerModels(provider, refresh)
+      .then((catalog) => { if (seq.current === mine) setState({ catalog, loading: false }); })
+      .catch(() => { if (seq.current === mine) setState({ catalog: null, loading: false }); });
+  }, [provider]);
+  useEffect(() => { load(false); }, [load]);
+  return { catalog: state.catalog, loading: state.loading, reload: () => load(true) };
+}
 
 function Field({ label, hint, children }) {
   return (
@@ -271,29 +287,18 @@ export default function Setup() {
   const [data, setData] = useState(null);
   const [msg, setMsg] = useState('');
   const [msgErr, setMsgErr] = useState(false);
-  const [modelDraft, setModelDraft] = useState('');
-  const [fbModelDraft, setFbModelDraft] = useState('');
-  const [models, setModels] = useState([]); // suggestions for current provider
   // "Draft" providers: when you pick a cloud provider that has no API key yet,
   // we stage the choice (reveal its key field) WITHOUT saving — saving would be
   // rejected server-side ("key not set"). Once the key is added we auto-commit.
   const [sumDraft, setSumDraft] = useState(null);
   const [sttDraft, setSttDraft] = useState(null);
-  const listId = useRef(`models-${Math.random().toString(36).slice(2)}`).current;
 
   function reload() { if (guildId) api.config(guildId).then(setData).catch(() => setData(null)); }
   useEffect(() => { reload(); }, [guildId]);
-  useEffect(() => { if (data?.config) setModelDraft(data.config.summarizerModel); }, [data?.config?.summarizerModel]);
-  useEffect(() => { if (data?.config) setFbModelDraft(data.config.summarizerFallbackModel || ''); }, [data?.config?.summarizerFallbackModel]);
 
-  // Fetch the live model list whenever the provider changes (incl. Ollama tags).
-  const provider = data?.config?.summarizerProvider;
-  useEffect(() => {
-    if (!provider) return;
-    let stale = false;
-    api.providerModels(provider).then((r) => { if (!stale) setModels(r.models || []); }).catch(() => { if (!stale) setModels([]); });
-    return () => { stale = true; };
-  }, [provider]);
+  // One catalog per model field: the primary provider's and the fallback's.
+  const models = useCatalog(data?.config?.summarizerProvider);
+  const fbModels = useCatalog(data?.config?.summarizerFallbackProvider);
 
   if (!guildId) return (
     <Page max="720px">
@@ -309,7 +314,7 @@ export default function Setup() {
     </Page>
   );
 
-  const { config: c, providers, sttProviders, channels, secrets = {} } = data;
+  const { config: c, providers, sttProviders, channels, secrets = {}, defaultModels = {} } = data;
   const save = async (patch) => {
     try {
       const r = await api.saveConfig(guildId, patch);
@@ -335,13 +340,13 @@ export default function Setup() {
       setMsg(''); 
     } else {
       setSumDraft(null);
-      save({ provider: p, model: PROVIDER_DEFAULTS[p] || '' });
+      save({ provider: p, model: defaultModels[p] || '' });
     }
   }
   // After a key lands for the staged provider, commit the switch.
   async function commitSumKey() {
     await reload();
-    if (sumDraft) { await save({ provider: sumDraft, model: PROVIDER_DEFAULTS[sumDraft] || '' }); setSumDraft(null); }
+    if (sumDraft) { await save({ provider: sumDraft, model: defaultModels[sumDraft] || '' }); setSumDraft(null); }
   }
 
   // ── Transcription provider, same pattern ──────────────────────────────────
@@ -396,26 +401,10 @@ export default function Setup() {
           {sumKeyed && <KeyEditor provider={sumProvider} present={!!secrets[sumProvider]} onChanged={commitSumKey} autoEdit={!!sumDraft} />}
 
           {!sumDraft && (
-          <Field label="Model" hint={models.length ? 'Pick a suggestion or type any model id the provider supports.' : 'Type the model id for the chosen provider.'}>
-            <input className="input" value={modelDraft} list={listId}
-              onChange={(e) => setModelDraft(e.target.value)}
-              onBlur={(e) => {
-                const v = e.target.value.trim();
-                if (v && v !== c.summarizerModel) save({ provider: c.summarizerProvider, model: v });
-                else if (!v) setModelDraft(c.summarizerModel);
-              }} />
-            <datalist id={listId}>
-              {models.map((m) => <option key={m} value={m} />)}
-            </datalist>
-            {models.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {models.slice(0, 6).map((m) => (
-                  <button key={m} type="button"
-                    onClick={() => { setModelDraft(m); if (m !== c.summarizerModel) save({ provider: c.summarizerProvider, model: m }); }}
-                    className={`chip hover:!bg-surface-2 transition-colors ${m === c.summarizerModel ? '!bg-primary-soft !text-ink' : ''}`}>{m}</button>
-                ))}
-              </div>
-            )}
+          <Field label="Model" hint="Type to search the provider's catalog. Any id it supports also works — press Enter to use what you typed.">
+            <ModelPicker value={c.summarizerModel} catalog={models.catalog} loading={models.loading}
+              onRefresh={models.reload}
+              onPick={(id) => save({ provider: c.summarizerProvider, model: id })} />
           </Field>
           )}
 
@@ -434,13 +423,11 @@ export default function Setup() {
               <Chevron />
             </div>
             {c.summarizerFallbackProvider && (
-              <input className="input mt-2" value={fbModelDraft} placeholder="Fallback model id…"
-                onChange={(e) => setFbModelDraft(e.target.value)}
-                onBlur={(e) => {
-                  const v = e.target.value.trim();
-                  if (v && v !== c.summarizerFallbackModel) save({ fallbackModel: v });
-                  else if (!v) setFbModelDraft(c.summarizerFallbackModel || '');
-                }} />
+              <div className="mt-2">
+                <ModelPicker value={c.summarizerFallbackModel} catalog={fbModels.catalog} loading={fbModels.loading}
+                  onRefresh={fbModels.reload}
+                  onPick={(id) => save({ fallbackModel: id })} />
+              </div>
             )}
           </Field>
           )}

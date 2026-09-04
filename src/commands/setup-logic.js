@@ -1,5 +1,5 @@
 import { SUPPORTED_PROVIDERS } from '../adapters/summarizer/index.js';
-import { MODEL_SUGGESTIONS } from '../adapters/summarizer/models.js';
+import { DEFAULT_MODELS } from '../adapters/summarizer/models.js';
 import { LANGUAGE_CODES, SUMMARY_LANGUAGE_VALUES } from '../adapters/summarizer/languages.js';
 import { STT_PROVIDERS, STT_MODELS, sttProviderReady } from '../adapters/stt/index.js';
 
@@ -41,9 +41,9 @@ export function validateSetup(input, env) {
       const key = providerKeyPresent(fb, env);
       if (!key.ok) return { ok: false, error: `Cannot use ${fb} as fallback: ${key.missing} is not set in .env.` };
       patch.summarizerFallbackProvider = fb;
-      // Default to this provider's first suggested model rather than inheriting
-      // the outgoing provider's model id, which would be meaningless to it.
-      patch.summarizerFallbackModel = input.fallbackModel || MODEL_SUGGESTIONS[fb]?.[0] || null;
+      // Default to this provider's own default model rather than inheriting the
+      // outgoing provider's model id, which would be meaningless to it.
+      patch.summarizerFallbackModel = input.fallbackModel || DEFAULT_MODELS[fb] || null;
     }
   } else if (input.fallbackModel !== undefined) {
     patch.summarizerFallbackModel = input.fallbackModel || null;

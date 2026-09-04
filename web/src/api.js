@@ -57,7 +57,7 @@ export const api = {
   commands: () => fetch('/api/commands').then(json),
   config: (g) => fetch(`/api/guilds/${g}/config`).then(json),
   saveConfig: (g, patch) => fetch(`/api/guilds/${g}/config`, jsonBody('PATCH', patch)).then(json),
-  providerModels: (provider) => fetch(`/api/providers/${provider}/models`).then(json),
+  providerModels: (provider, refresh = false) => fetch(`/api/providers/${provider}/models${refresh ? '?refresh=1' : ''}`).then(json),
   setProviderKey: (provider, key) => fetch(`/api/providers/${provider}/key`, jsonBody('PUT', { key })).then(json),
   systemStatus: () => fetch('/api/system/status').then(json),
   setConnection: (patch) => fetch('/api/system/connection', jsonBody('PUT', patch)).then(json),

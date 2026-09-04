@@ -27,6 +27,16 @@ test('setup provider option includes openrouter', () => {
   assert.ok(values.includes('opencode'));
 });
 
+test('model options are autocompleted, not choice-limited', () => {
+  const setup = commandsJSON().find((c) => c.name === 'setup');
+  for (const name of ['model', 'fallback_model']) {
+    const opt = setup.options.find((o) => o.name === name);
+    assert.equal(opt.autocomplete, true, `${name} autocompletes`);
+    // Discord rejects an option that declares both choices and autocomplete.
+    assert.ok(!opt.choices?.length, `${name} has no static choices`);
+  }
+});
+
 test('stt_provider option offers sidecar and openai choices', () => {
   const setup = commandsJSON().find((c) => c.name === 'setup');
   const stt = setup.options.find((o) => o.name === 'stt_provider');

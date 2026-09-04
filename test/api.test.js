@@ -82,7 +82,7 @@ test('GET config returns providers + PATCH validates', async () => {
     assert.ok(Array.isArray(cfg.providers));
     assert.ok(cfg.providers.some((p) => p.provider === 'openrouter'));
     assert.equal('openrouter' in (cfg.secrets || {}), true);
-    assert.ok(Array.isArray(cfg.models?.openrouter) && cfg.models.openrouter.includes('openai/gpt-4o-mini'));
+    assert.equal(cfg.defaultModels?.openrouter, 'openai/gpt-4o-mini');
     assert.equal(cfg.config.summarizerProvider, 'gemini'); // default
 
     // invalid provider rejected with 400
@@ -99,6 +99,24 @@ test('GET config returns providers + PATCH validates', async () => {
     });
     assert.equal(ok.status, 200);
     assert.equal((await ok.json()).config.whisperModel, 'base');
+  } finally { close(); }
+});
+
+test('GET provider models returns a catalog and rejects unknown providers', async () => {
+  const db = openDb(':memory:');
+  const { base, close } = await listen(appWith(db));
+  try {
+    // ollama is local-only: live when a server is running, curated shortlist
+    // when it isn't. Either way the picker gets a usable list.
+    const cat = await (await fetch(`${base}/api/providers/ollama/models`)).json();
+    assert.equal(cat.provider, 'ollama');
+    assert.ok(['live', 'curated'].includes(cat.source));
+    assert.ok(cat.models.length > 0);
+    assert.ok(cat.models.every((m) => typeof m.id === 'string' && typeof m.label === 'string'));
+    assert.equal(cat.default, 'llama3');
+
+    const bad = await fetch(`${base}/api/providers/nope/models`);
+    assert.equal(bad.status, 400);
   } finally { close(); }
 });
 

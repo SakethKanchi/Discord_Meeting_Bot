@@ -5,6 +5,7 @@ import { OpenAISummarizer } from './openai.js';
 import { OpenCodeSummarizer } from './opencode.js';
 import { OpenRouterSummarizer } from './openrouter.js';
 import { FallbackSummarizer } from './fallback.js';
+import { DEFAULT_MODELS } from './models.js';
 import { config as envConfig } from '../../config/env.js';
 
 export function createAdapter(provider, model, env = envConfig) {
@@ -13,8 +14,8 @@ export function createAdapter(provider, model, env = envConfig) {
     case 'gemini': return new GeminiSummarizer(model, env.gemini.apiKey);
     case 'ollama': return new OllamaSummarizer(model, env.ollama.url);
     case 'openai': return new OpenAISummarizer(model, env.openai.baseUrl, env.openai.apiKey);
-    case 'opencode': return new OpenCodeSummarizer(model || 'deepseek-v4-flash', env.opencode.baseUrl, env.opencode.apiKey);
-    case 'openrouter': return new OpenRouterSummarizer(model || 'openai/gpt-4o-mini', env.openrouter.baseUrl, env.openrouter.apiKey);
+    case 'opencode': return new OpenCodeSummarizer(model || DEFAULT_MODELS.opencode, env.opencode.baseUrl, env.opencode.apiKey);
+    case 'openrouter': return new OpenRouterSummarizer(model || DEFAULT_MODELS.openrouter, env.openrouter.baseUrl, env.openrouter.apiKey);
     default: throw new Error(`Unknown summarizer provider: ${provider}`);
   }
 }

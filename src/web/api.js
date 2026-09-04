@@ -10,7 +10,7 @@ import { askMeeting } from '../adapters/summarizer/ask.js';
 import { getSummarizer } from '../adapters/summarizer/index.js';
 import { buildTranscript, computeTalkTime } from '../pipeline/summarize.js';
 import { resolveSummaryLanguage } from '../adapters/summarizer/languages.js';
-import { MODEL_SUGGESTIONS, fetchOllamaModels } from '../adapters/summarizer/models.js';
+import { listModels, clearModelCache, DEFAULT_MODELS, CATALOG_PROVIDERS } from '../adapters/summarizer/models.js';
 import { secretStatus, setProviderKey, isSecretProvider, connectionStatus, setConnection } from '../store/secrets.js';
 import { COMMAND_CATALOG } from '../commands/definitions.js';
 import { retryMeeting, retryPlan, RETRYABLE_STATUSES } from '../pipeline/retry.js';
@@ -270,7 +270,7 @@ export function apiRouter({ db, bot = null, client = null, sidecar = null }) {
       providers: availableProviders(env),
       sttProviders: availableSttProviders(env),
       channels,
-      models: MODEL_SUGGESTIONS,
+      defaultModels: DEFAULT_MODELS,
       secrets: secretStatus(env),
     });
   });
@@ -296,17 +296,16 @@ export function apiRouter({ db, bot = null, client = null, sidecar = null }) {
     res.json({ ok: true, config, sidecar: sidecarStatus });
   });
 
-  // Live model list for the chosen provider (Ollama is queried for installed tags).
+  // Full model catalog for a provider, queried live (Gemini ListModels, the
+  // OpenAI-compatible /models endpoints, Ollama's installed tags) and cached.
+  // `?refresh=1` bypasses the cache. Degrades to the curated shortlist when the
+  // provider can't be reached — see adapters/summarizer/models.js.
   r.get('/providers/:provider/models', async (req, res) => {
     const { provider } = req.params;
-    const suggested = MODEL_SUGGESTIONS[provider] || [];
-    if (provider === 'ollama') {
-      const installed = await fetchOllamaModels(env.ollama.url);
-      // Installed first (what the user actually has), then suggestions not already listed.
-      const merged = [...installed, ...suggested.filter((m) => !installed.includes(m))];
-      return res.json({ models: merged, installed });
+    if (!CATALOG_PROVIDERS.includes(provider)) {
+      return res.status(400).json({ error: `Unknown provider "${provider}". Use one of: ${CATALOG_PROVIDERS.join(', ')}.` });
     }
-    res.json({ models: suggested, installed: [] });
+    res.json(await listModels(provider, { env, refresh: req.query.refresh === '1' }));
   });
 
   // Set or clear a provider's API key. Persists to .env and updates the live
@@ -319,6 +318,9 @@ export function apiRouter({ db, bot = null, client = null, sidecar = null }) {
     const value = typeof req.body?.key === 'string' ? req.body.key : '';
     try {
       const secrets = await setProviderKey(provider, value, { env });
+      // A new key turns a "curated fallback" catalog into a live one; drop the
+      // cached miss so the picker fills immediately.
+      clearModelCache(provider);
       res.json({ ok: true, secrets, providers: availableProviders(env) });
     } catch (e) {
       // Validation failures (control chars in the key) are the client's fault.

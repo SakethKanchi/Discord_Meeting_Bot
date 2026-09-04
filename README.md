@@ -317,7 +317,7 @@ pm2 save
 | Option | Description |
 |--------|-------------|
 | `provider` | Summarizer: `gemini` (default), `openai`, `ollama`, `opencode`, `openrouter` |
-| `model` | Model name for the chosen provider |
+| `model` | Model for the chosen provider — type to search the provider's live catalog (autocomplete) |
 | `stt_provider` | Speech-to-text backend: `sidecar` (local faster-whisper, default), `openai` |
 | `stt_model` | Cloud STT model when using `openai` (e.g. `whisper-1`) |
 | `whisper_model` | Local sidecar size: `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo` |
@@ -333,11 +333,13 @@ pm2 save
 
 - **gemini** *(default)* — Gemini 2.5 Flash, free tier available. Set `GEMINI_API_KEY`.
 - **openai** — any OpenAI-compatible endpoint. Set `OPENAI_API_KEY` (and `OPENAI_BASE_URL` for third-party gateways).
-- **opencode** — [OpenCode Zen Go](https://opencode.ai/zen/go/v1/models) gateway (OpenAI-compatible). Set `OPENCODE_API_KEY`. Defaults to `deepseek-v4-flash` if no model is set. Use the **bare** model id (no `opencode/` prefix) — e.g. `deepseek-v4-flash`, `minimax-m3`, `kimi-k2.6`, `glm-5.1`, `qwen3.7-max`; full list at [`/zen/go/v1/models`](https://opencode.ai/zen/go/v1/models). Override the endpoint with `OPENCODE_BASE_URL` (default `https://opencode.ai/zen/go/v1`).
-- **openrouter** — [OpenRouter](https://openrouter.ai/models) gateway (OpenAI-compatible): one key for models from many vendors. Set `OPENROUTER_API_KEY`. Defaults to `openai/gpt-4o-mini` if no model is set. Model ids are **vendor-namespaced** — e.g. `openai/gpt-4o-mini`, `anthropic/claude-sonnet-4`, `google/gemini-2.5-flash`; full list at [openrouter.ai/models](https://openrouter.ai/models). Override the endpoint with `OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`).
+- **opencode** — [OpenCode Zen Go](https://opencode.ai/zen/go/v1/models) gateway (OpenAI-compatible). Set `OPENCODE_API_KEY`. Defaults to `glm-5.3` if no model is set. Use the **bare** model id (no `opencode/` prefix) — e.g. `glm-5.3`, `minimax-m3`, `kimi-k3`, `qwen3.8-max`. Override the endpoint with `OPENCODE_BASE_URL` (default `https://opencode.ai/zen/go/v1`).
+- **openrouter** — [OpenRouter](https://openrouter.ai/models) gateway (OpenAI-compatible): one key for models from many vendors. Set `OPENROUTER_API_KEY`. Defaults to `openai/gpt-4o-mini` if no model is set. Model ids are **vendor-namespaced** — e.g. `openai/gpt-4o-mini`, `anthropic/claude-sonnet-4`, `google/gemini-2.5-flash`. Override the endpoint with `OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`).
 - **ollama** — fully offline, no key. Run Ollama locally and set `OLLAMA_URL`.
 
 All providers return the same structured-notes shape, so output is consistent regardless of which you pick.
+
+**Model lists are live.** Every provider is queried for the models it actually serves — Gemini's `ListModels`, the OpenAI-compatible `/models` endpoints (OpenAI, OpenCode Zen, OpenRouter), Ollama's installed tags — so `/setup model` autocompletes and the dashboard's model field searches the provider's whole catalog (400+ ids on OpenRouter) instead of a hardcoded shortlist. Catalogs are cached for 10 minutes; if a provider is unreachable or its key is missing, the picker falls back to a known-good shortlist and says so. Any id can still be typed by hand.
 
 ## 🎙️ Supported transcription
 

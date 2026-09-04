@@ -14,6 +14,7 @@ import { processMeeting } from './pipeline/orchestrator.js';
 import { getSummarizer } from './adapters/summarizer/index.js';
 import { shouldAutoJoin, shouldAutoLeave } from './voice/decisions.js';
 import { validateSetup } from './commands/setup-logic.js';
+import { handleAutocomplete } from './commands/autocomplete.js';
 import { renderNotes, chunk } from './delivery/discord-notes.js';
 import { postNotes } from './delivery/post.js';
 
@@ -260,6 +261,11 @@ export function startBot({ db, audioRoot }) {
   });
 
   client.on('interactionCreate', async (interaction) => {
+    // Model options are free text backed by the provider's live catalog. Answer
+    // separately from commands: an autocomplete interaction can only be
+    // respond()ed to, never replied to, so the command error path below
+    // doesn't apply.
+    if (interaction.isAutocomplete()) return handleAutocomplete(interaction, { db, env: config });
     if (!interaction.isChatInputCommand()) return;
     const { commandName, guild, member } = interaction;
     try {
